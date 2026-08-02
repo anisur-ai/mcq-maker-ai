@@ -1,7 +1,6 @@
 import os
 import streamlit as st
 from groq import Groq
-from PIL import Image
 
 # Streamlit Secrets থেকে API Key নেওয়া
 api_key = st.secrets.get("GROQ_API_KEY")
@@ -12,56 +11,43 @@ if not api_key:
 
 client = Groq(api_key=api_key)
 
-st.set_page_config(page_title="MCQ Maker AI", page_icon="📚")
-
 st.title("📚 Smart MCQ Maker AI App")
-st.write("বইয়ের ছবি দিন বা পড়া লিখে দিন—আপনার ইচ্ছেমতো AI প্রশ্ন বানিয়ে দেবে!")
+st.write("বইয়ের ছবি দিন বা পড়া লিখে দিন—আপনার AI প্রশ্ন বানিয়ে দেবে!")
 
-# ১. প্রশ্নের সংখ্যা বাছাই (ডিফল্ট ১০ রাখা হয়েছে)
-num_questions = st.number_input("কয়টি MCQ চান? (খালি রাখলে AI নিজে ঠিক করবে)", min_value=1, max_value=30, value=10)
+# ১. প্রশ্নের সংখ্যা
+num_questions = st.number_input("কয়টি MCQ চান? (খালি রাখলে AI নিজে ঠিক করবে)", min_value=1, max_value=20, value=10)
 
 # ২. পড়া বা টেক্সট লেখার বক্স
 text_input = st.text_area("পড়াটি এখানে লিখুন বা পেস্ট করুন (ঐচ্ছিক):")
 
-# ৩. ছবি আপলোড করার সুবিধা
-uploaded_file = st.file_uploader("অথবা পড়ার ছবি তুলে আপলোড করুন (JPG/PNG):", type=["jpg", "jpeg", "png"])
-
-# ৪. ব্যবহারকারীর বিশেষ কোনো নির্দেশ/আদেশ
+# ৩. বিশেষ কোনো নির্দেশ
 custom_instruction = st.text_input("বিশেষ কোনো নির্দেশ? (যেমন: 'শুধু কঠিন প্রশ্ন করো' বা 'উত্তরসহ ব্যাখ্যা দাও'):")
 
 # মেকিং বাটন
 if st.button("MCQ তৈরি করুন 🚀"):
-    if text_input or uploaded_file:
-
-        # Groq মডেল ব্যবহার করার জন্য
-        model = "llama-3.3-70b-versatile"
-        
-        
-     # স্মার্ট প্রম্পট লজিক
+    if text_input:
         prompt = f"""
-        তুমি একজন বিশেষজ্ঞ শিক্ষক। প্রদত্ত পড়া বা ছবি থেকে মোট {num_questions}টি MCQ প্রশ্ন তৈরি করো।
-        
-        নিয়মাবলী:
-        ১. প্রতিটি প্রশ্নের ৪টি করে স্পষ্ট অপশন (A, B, C, D) থাকবে।
-        ২. শেষে প্রতিটি প্রশ্নের সঠিক উত্তর এবং সংক্ষেপে ১ লাইনে উত্তরটির ব্যাখ্যা থাকবে।
-        ৩. সম্পূর্ণ লেখাটি স্পষ্ট বাংলা ভাষায় হতে হবে।
-        """
-        
-        if custom_instruction:
-            prompt += f"\nব্যবহারকারীর অতিরিক্ত নির্দেশ: {custom_instruction}"
+তুমি একজন বিশেষজ্ঞ শিক্ষক। নিচে দেওয়া পড়া থেকে {num_questions}টি MCQ প্রশ্ন তৈরি করো।
 
-        with st.spinner("AI ছবি ও পড়া বিশ্লেষণ করে MCQ তৈরি করছে..."):
+পড়া:
+{text_input}
+
+বিশেষ নির্দেশ: {custom_instruction}
+
+নিয়মাবলী:
+১. প্রতিটি প্রশ্নের ৪টি করে স্পষ্ট অপশন (A, B, C, D) দেবে।
+২. শেষে প্রতিটি প্রশ্নের সঠিক উত্তর স্পষ্ট করে জানিয়ে দেবে।
+৩. সম্পূর্ণ লেখাটি স্পষ্ট বাংলা ভাষায় হতে হবে।
+"""
+        with st.spinner("AI প্রশ্ন তৈরি করছে... অনুগ্রহ করে অপেক্ষা করুন।"):
             try:
-                if uploaded_file:
-                    image = Image.open(uploaded_file)
-                    response = model.generate_content([prompt, image])
-                else:
-                    full_prompt = f"{prompt}\n\nনিচে দেওয়া পড়া থেকে প্রশ্ন তৈরি করো:\n{text_input}"
-                    response = model.generate_content(full_prompt)
-                    
-                st.success("আপনার প্রশ্ন প্রস্তুত!")
-                st.markdown(response.text)
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                st.success("✅ আপনার MCQ তৈরি হয়ে গেছে!")
+                st.write(response.choices[0].message.content)
             except Exception as e:
                 st.error(f"একটি সমস্যা হয়েছে: {e}")
     else:
-        st.warning("দয়া করে আগে কিছু লিখে দিন অথবা বই/খাতার কোনো ছবি আপলোড করুন!")
+        st.warning("অনুগ্রহ করে কোনো পড়া বা বিষয় লিখে দিন।")
