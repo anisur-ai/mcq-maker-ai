@@ -1,9 +1,11 @@
 import streamlit as st
-import google.generativeai as genai
+import streamlit as st
+from groq import Groq
 from PIL import Image
 
-# আপনার দেওয়া Gemini API Key
-genai.configure(api_key="AQ.Ab8RN6LjxHOkok6-sgau5ClTBytNRkOwaY6yUGvsPwhXdQOWwg")
+# Streamlit Secrets থেকে Groq API Key নেওয়া
+client = Groq(api_key=st.secrets["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"])
+
 
 st.set_page_config(page_title="MCQ Maker AI", page_icon="📚")
 
