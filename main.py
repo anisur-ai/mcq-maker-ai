@@ -32,7 +32,8 @@ custom_instruction = st.text_input("বিশেষ কোনো নির্দ
 # মেকিং বাটন
 if st.button("MCQ তৈরি করুন 🚀"):
     if text_input or uploaded_file:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+       # Groq মডেল ব্যবহার করার জন্য
+model = "llama-3.3-70b-versatile"
         
         # স্মার্ট প্রম্পট লজিক
         prompt = f"""
