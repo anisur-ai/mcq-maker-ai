@@ -1,3 +1,5 @@
 streamlit
-google-generativeai
-Pillow
+groq
+pillow
+python-dotenv
+
