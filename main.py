@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 from groq import Groq
+from PIL import Image
 
 # Streamlit Secrets থেকে API Key নেওয়া
 api_key = st.secrets.get("GROQ_API_KEY")
@@ -20,17 +21,21 @@ num_questions = st.number_input("কয়টি MCQ চান? (খালি র�
 # ২. পড়া বা টেক্সট লেখার বক্স
 text_input = st.text_area("পড়াটি এখানে লিখুন বা পেস্ট করুন (ঐচ্ছিক):")
 
-# ৩. বিশেষ কোনো নির্দেশ
+# ৩. ছবি আপলোড করার সুবিধা
+uploaded_file = st.file_uploader("অথবা পড়ার ছবি তুলে আপলোড করুন (JPG/PNG):", type=["jpg", "jpeg", "png"])
+
+# ৪. বিশেষ কোনো নির্দেশ
 custom_instruction = st.text_input("বিশেষ কোনো নির্দেশ? (যেমন: 'শুধু কঠিন প্রশ্ন করো' বা 'উত্তরসহ ব্যাখ্যা দাও'):")
 
 # মেকিং বাটন
 if st.button("MCQ তৈরি করুন 🚀"):
-    if text_input:
+    if text_input or uploaded_file:
+        
         prompt = f"""
 তুমি একজন বিশেষজ্ঞ শিক্ষক। নিচে দেওয়া পড়া থেকে {num_questions}টি MCQ প্রশ্ন তৈরি করো।
 
-পড়া:
-{text_input}
+পড়া/বিষয়:
+{text_input if text_input else "আপলোড করা ছবি বা বিষয়বস্তু থেকে প্রশ্ন তৈরি করো।"}
 
 বিশেষ নির্দেশ: {custom_instruction}
 
@@ -50,4 +55,4 @@ if st.button("MCQ তৈরি করুন 🚀"):
             except Exception as e:
                 st.error(f"একটি সমস্যা হয়েছে: {e}")
     else:
-        st.warning("অনুগ্রহ করে কোনো পড়া বা বিষয় লিখে দিন।")
+        st.warning("অনুগ্রহ করে কোনো পড়া লিখুন অথবা ছবি আপলোড করুন।")
