@@ -6,7 +6,6 @@ from PIL import Image
 # Streamlit Secrets থেকে Groq API Key নেওয়া
 client = Groq(api_key=st.secrets["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"])
 
-
 st.set_page_config(page_title="MCQ Maker AI", page_icon="📚")
 
 st.title("📚 Smart MCQ Maker AI App")
