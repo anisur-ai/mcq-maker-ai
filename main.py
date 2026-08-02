@@ -4,7 +4,14 @@ from groq import Groq
 from PIL import Image
 
 # Streamlit Secrets থেকে Groq API Key নেওয়া
-client = Groq(api_key=st.secrets["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"])
+# API Key নিরাপত্তার সাথে খুঁজে নেওয়ার উপায়
+api_key = st.secrets.get("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")
+
+if not api_key:
+    st.error("⚠️ Streamlit Secrets-এ GROQ_API_KEY পাওয়া যায়নি! অনুগ্রহ করে Manage app > Secrets-এ API Key যোগ করুন।")
+    st.stop()
+
+client = Groq(api_key=api_key)
 
 st.set_page_config(page_title="MCQ Maker AI", page_icon="📚")
 
