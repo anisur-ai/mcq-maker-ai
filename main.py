@@ -40,7 +40,7 @@ if st.button("MCQ তৈরি করুন 🚀"):
                     prompt = f"এই ছবিতে থাকা পড়া থেকে {num_questions}টি স্পষ্ট বাংলা MCQ প্রশ্ন ও শেষে সঠিক উত্তর তৈরি করে দাও। {custom_instruction}"
                     
                     response = client.chat.completions.create(
-                        model="llama-3.2-11b-vision-preview",
+                        model="llama-3.2-90b-vision-preview",
                         messages=[
                             {
                                 "role": "user",
@@ -75,3 +75,4 @@ if st.button("MCQ তৈরি করুন 🚀"):
                 st.error(f"একটি সমস্যা হয়েছে: {e}")
     else:
         st.warning("অনুগ্রহ করে কোনো পড়া লিখুন অথবা বইয়ের ছবি আপলোড করুন।")
+    
