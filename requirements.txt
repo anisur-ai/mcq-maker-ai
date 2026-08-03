@@ -1,5 +1,5 @@
 streamlit
 groq
-pillow
-python-dotenv
-
+python-docx
+fpdf
+requests
