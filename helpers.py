@@ -1,111 +1,179 @@
-import os
-import re
 import requests
 import logging
+import tempfile
+import re
 from datetime import datetime
 from docx import Document
 from docx.shared import Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
-# Logging Setup for Production
+# Logging Setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ১. OCR Text Clean
 def clean_ocr_text(text):
+    """
+    Cleans up redundant spaces and multiple empty line breaks from OCR text.
+    """
     if not text:
         return ""
-    cleaned = re.sub(r'[ \t]+', ' ', text)
-    cleaned = re.sub(r'\n\s*\n', '\n\n', cleaned)
-    return cleaned.strip()
+    # Multiple newlines reduction
+    text = re.sub(r'\n\s*\n', '\n\n', text)
+    # Extra trailing spaces removal
+    text = "\n".join([line.strip() for line in text.splitlines()])
+    return text.strip()
 
-# ২. OCR Space Service
-def ocr_space_file(uploaded_file, api_key, language='ben'):
-    payload = {
-        'apikey': api_key,
-        'language': language,
-        'isOverlayRequired': False
-    }
-    files = {
-        "filename": ("image.jpg", uploaded_file.getvalue())
-    }
+def ocr_space_file(file, api_key, language='ben'):
+    """
+    Sends an uploaded image file to the OCR.Space API and extracts cleaned text with detailed status.
+    """
     try:
-        r = requests.post(
-            "https://api.ocr.space/parse/image",
-            files=files,
-            data=payload,
-            timeout=30
-        )
-        r.raise_for_status()  # HTTP Error Status Check (500, 404, etc.)
-        result = r.json()
+        url = 'https://api.ocr.space/parse/image'
+        payload = {
+            'apikey': api_key,
+            'language': language,
+            'isOverlayRequired': False,
+            'detectOrientation': True,
+            'scale': True,
+            'OCREngine': 2
+        }
+        
+        file_bytes = file.getvalue()
+        files = {'file': (file.name, file_bytes, file.type)}
+        
+        response = requests.post(url, data=payload, files=files, timeout=30)
+        response.raise_for_status()
+        
+        result = response.json()
         
         if result.get("IsErroredOnProcessing"):
-            error_msg = result.get("ErrorMessage", [""])[0]
-            if "limit" in error_msg.lower():
+            error_msg = result.get("ErrorMessage", ["Unknown error"])[0]
+            logging.error(f"OCR Error: {error_msg}")
+            
+            if "maximum" in error_msg.lower() or "limit" in error_msg.lower():
                 return None, "LIMIT_EXCEEDED"
-            return None, "ERROR"
+            return None, "SERVER_ERROR"
+
+        parsed_results = result.get("ParsedResults", [])
+        if not parsed_results:
+            return None, "NO_TEXT"
+            
+        raw_text = parsed_results[0].get("ParsedText", "")
+        cleaned_text = clean_ocr_text(raw_text)
         
-        parsed_results = result.get("ParsedResults")
-        if parsed_results and len(parsed_results) > 0:
-            parsed_text = parsed_results[0].get("ParsedText", "")
-            cleaned_text = clean_ocr_text(parsed_text)
+        if not cleaned_text:
+            return None, "NO_TEXT"
             
-            if len(cleaned_text.strip()) < 10:
-                return cleaned_text, "LOW_CONFIDENCE"
-            return cleaned_text, "SUCCESS"
+        if len(cleaned_text) < 15:
+            return cleaned_text, "LOW_CONFIDENCE"
             
-        return None, "NO_TEXT"
+        return cleaned_text, "SUCCESS"
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"OCR Request failed: {e}")
+        return None, "NETWORK_ERROR"
     except Exception as e:
-        logging.exception("OCR Error Occurred")
+        logging.error(f"Unexpected OCR error: {e}")
         return None, "SERVER_ERROR"
 
-# ৩. Optimized Hybrid Prompt Generator
-def generate_prompt(num_q, text_content, difficulty, q_type, lang, subject, cls, bloom, temp, custom_ins):
-    
-    if temp <= 0.3:
-        temp_instruction = "সম্পূর্ণ পাঠ্যবইভিত্তিক ও অত্যন্ত নির্ভুল তথ্য ব্যবহার করবে।"
-    elif temp >= 0.9:
-        temp_instruction = "শিক্ষার্থীদের চিন্তাশক্তি বৃদ্ধির জন্য সৃজনশীল ও ঘুরিয়ে লেখা প্রশ্ন তৈরি করবে।"
+
+def generate_prompt(num_questions, text, difficulty, q_type, lang, subject, cls, bloom, temp_mode, custom_instruction=""):
+    """
+    Generates a system prompt for LLMs based on strict intent recognition, temperature modes, and anti-hallucination rules.
+    """
+    if temp_mode <= 0.3:
+        tone = "Generate highly accurate, strictly textbook-based questions with zero deviation."
+    elif temp_mode >= 0.9:
+        tone = "Generate creative, analytical, and challenging questions while remaining strictly faithful to the core facts of the source."
     else:
-        temp_instruction = "মানসম্মত, সহজবোধ্য ও ব্যালেন্সড প্রশ্ন তৈরি করবে।"
+        tone = "Generate well-balanced, standard exam-oriented questions suitable for regular assessments."
 
-    return f"""
-তুমি একজন বুদ্ধিমান শিক্ষাবিদ ও AI অ্যাসিস্ট্যান্ট (Anis MCQ Maker AI)। ব্যবহারকারীর ইনপুট পড়ে তার মূল উদ্দেশ্য (Intent) বুঝে উত্তর দাও:
+    prompt = f"""
+[SYSTEM INSTRUCTION]
+You are an advanced AI Educational Assistant designed for Class 5 to 12 students and teachers.
 
-১. **Ambiguous Intent (অস্পষ্ট উদ্দেশ্য):** ইনপুটটি যদি খুব সংক্ষিপ্ত বা অস্পষ্ট হয় (যেমন শুধু "পলাশীর যুদ্ধ"), তবে অনুমান না করে জিজ্ঞেস করো: "আপনি কি এর ব্যাখ্যা চান, নাকি MCQ প্রশ্ন তৈরি করতে চান?"
-২. **Chat:** সাধারণ কুশলে মিষ্টি ও সংক্ষিপ্ত উত্তর দাও ({lang})।
-৩. **Explanation:** নির্দিষ্ট বিষয়ের সংক্ষিপ্ত ও স্পষ্ট পয়েন্টভিত্তিক ব্যাখ্যা দাও।
-৪. **Question Paper Generator:**
-   - মোট প্রশ্ন: {num_q} | বিষয়: {subject} | শ্রেণী: {cls} | মান: {difficulty} | ধরন: {q_type} | Bloom: {bloom} | ভাষা: {lang}
-   - টোন: {temp_instruction}
-   - **টেক্সট বিশ্লেষণ ও পুনরাবৃত্তি রোধ:** ইনপুটটি বড় অধ্যায় হলে মূল ও গুরুত্বপূর্ণ ধারণাগুলো থেকে প্রশ্ন করবে; ছোট অনুচ্ছেদ হলে শুধু তার ওপর ভিত্তি করে বানাবে। ইনপুটে একই তথ্য বারবার থাকলেও তা থেকে একাধিক একজাতীয় প্রশ্ন তৈরি করবে না। তথ্য অপর্যাপ্ত হলে স্পষ্ট জানাবে।
-   - **নিয়ম:** প্রশ্ন ১,২,৩.. ও অপশন (A),(B),(C),(D) নতুন লাইনে লিখবে (কোনো টেবিল নয়)। উত্তর আগে থেকে বোল্ড/চিহ্নিত করবে না। সঠিক উত্তর A,B,C,D-তে সমানভাবে ছড়াবে। 
-   - প্রশ্ন শেষে `---ANSWER_KEY---` শিরোনাম দিয়ে সঠিক উত্তর ও ১ লাইনের ব্যাখ্যা দেবে।
+CONTEXT:
+- Subject: {subject}
+- Target Class: {cls}
+- Language: {lang}
+- Output Type Requested: {q_type}
+- Difficulty Level: {difficulty}
+- Bloom's Taxonomy Level: {bloom}
+- Number of Questions Requested: {num_questions}
+- AI Generation Mode: {tone}
 
-ইনপুট/পড়া: {text_content}
-বিশেষ নির্দেশ: {custom_ins}
+INPUT TEXT/QUERY:
+\"\"\"{text}\"\"\"
+
+SPECIAL CUSTOM INSTRUCTIONS:
+{custom_instruction if custom_instruction else "None"}
+
+OPERATIONAL RULES & INTENT RECOGNITION:
+1. INTENT ANALYSIS FIRST:
+   - If the input text is a general greeting or casual chat, reply warmly and explain how you can help create question papers.
+   - If the input text asks an explicit question or seeks an explanation of a topic, answer the question clearly and directly first.
+   - If the input text is study material, generate exact and highly relevant questions.
+
+2. QUALITY & ANTI-HALLUCINATION RULES:
+   - Do NOT invent facts not present or implied in the input material unless answering general educational queries.
+   - If the input material is insufficient to generate {num_questions} unique questions, generate as many high-quality questions as possible and politely inform that more text is needed.
+   - Do not copy sentences verbatim from the source unless absolutely necessary.
+   - Ensure every question tests a different concept.
+   - Avoid duplicate or overlapping questions.
+   - If the input contains multiple images or chapters, merge all content seamlessly and generate questions without repeating the same concept.
+   - Mode Instruction: {tone}
+
+3. QUESTION FORMATTING:
+   - Randomize option positions (A, B, C, D) evenly across questions.
+   - Format clearly using Markdown. Do NOT use HTML tables.
+   - Append answers at the end separated strictly by "---ANSWER_KEY---".
+
+BEGIN RESPONSE NOW.
 """
+    return prompt.strip()
 
-# ৪. Professional Dynamic DOCX Generator
-def create_docx(text, subject="বিষয়", cls="শ্রেণী"):
+
+def create_docx(text, subject="General", cls="Class 7"):
+    """
+    Creates a temporary Word Document (.docx) with robust Bengali font support.
+    """
     doc = Document()
     
-    title = doc.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title.add_run("EXAMINATION / PRACTICE QUESTION PAPER")
-    run.bold = True
-    run.font.size = Pt(16)
+    # Configure Base Styles
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Nirmala UI'
+    font.size = Pt(11)
     
-    sub_title = doc.add_paragraph()
-    sub_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_sub = sub_title.add_run(f"Subject: {subject} | Class: {cls}")
-    run_sub.font.size = Pt(11)
+    # Safely Update existing rFonts or Create New Node for XML Safety
+    rPr = style.element.get_or_add_rPr()
+    rFonts = rPr.rFonts
+    if rFonts is None:
+        rFonts = OxmlElement("w:rFonts")
+        rPr.append(rFonts)
+
+    rFonts.set(qn("w:ascii"), "Nirmala UI")
+    rFonts.set(qn("w:hAnsi"), "Nirmala UI")
+    rFonts.set(qn("w:cs"), "SolaimanLipi")
+    rFonts.set(qn("w:eastAsia"), "Nirmala UI")
+
+    # Title Section
+    doc.add_heading(f"{subject} - {cls} Question Paper", level=0)
+    doc.add_paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    doc.add_paragraph("-" * 40)
     
-    doc.add_paragraph("-" * 55)
+    # Content Breakdown
+    for line in text.split("\n"):
+        if line.strip() == "---ANSWER_KEY---":
+            doc.add_page_break()
+            doc.add_heading("Answer Key & Explanations", level=1)
+        else:
+            doc.add_paragraph(line)
+            
+    # Save to Temporary File
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+    doc.save(temp_file.name)
+    temp_file.close()
     
-    p = doc.add_paragraph(text)
-    p.paragraph_format.line_spacing = 1.25
-    
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    file_path = f"MCQ_{timestamp}.docx"
-    doc.save(file_path)
-    return file_path
+    return temp_file.name
+        
