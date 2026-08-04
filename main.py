@@ -1,11 +1,17 @@
 import streamlit as st
+import logging
+import os
 from groq import Groq
 from helpers import ocr_space_file, generate_prompt, create_docx
 
 # Streamlit Config
 st.set_page_config(page_title="Anis MCQ Maker AI", layout="wide")
 
-# ultra-professional & attractive CSS Design
+# Session State Initialization (Up to 20 items in history)
+if 'history' not in st.session_state:
+    st.session_state['history'] = []
+
+# Glassmorphism UI Design
 custom_css = """
 <style>
     .stApp {
@@ -16,7 +22,6 @@ custom_css = """
     section[data-testid="stSidebar"] {
         background: rgba(15, 23, 42, 0.65) !important;
         backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
         border-right: 1px solid rgba(255, 255, 255, 0.08);
     }
     .glowing-title {
@@ -27,19 +32,7 @@ custom_css = """
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-shadow: 0 0 30px rgba(129, 140, 248, 0.35);
-        letter-spacing: 0.5px;
         margin-bottom: 25px;
-        padding: 10px 0;
-    }
-    .stTextArea textarea, .stSelectbox select, .stTextInput input {
-        background-color: rgba(30, 41, 59, 0.7) !important;
-        color: #f8fafc !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-        border-radius: 12px !important;
-    }
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: #818cf8 !important;
-        box-shadow: 0 0 10px rgba(129, 140, 248, 0.5) !important;
     }
     div.stButton > button {
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #d946ef 100%);
@@ -50,102 +43,69 @@ custom_css = """
         font-size: 1.05rem;
         padding: 12px 24px;
         box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(217, 70, 239, 0.6);
-        color: #ffffff;
-    }
-    .stAlert {
-        border-radius: 12px !important;
-        backdrop-filter: blur(8px);
     }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
+# API Keys Checking
 groq_api_key = st.secrets.get("GROQ_API_KEY")
 ocr_api_key = st.secrets.get("OCR_API_KEY")
 
 if not groq_api_key:
-    st.error("⚠️ GROQ_API_KEY পাওয়া যায়নি! / GROQ_API_KEY not found!")
+    st.error("⚠️ GROQ_API_KEY পাওয়া যায়নি! অনুগ্রহ করে Streamlit Secrets থেকে API Key যোগ করুন।")
     st.stop()
 
 client = Groq(api_key=groq_api_key)
 
-# হেডার
 st.markdown('<div class="glowing-title">📚 Anis MCQ Maker AI 📚</div>', unsafe_allow_html=True)
 
 # Sidebar Options
-st.sidebar.header("⚙️ কাস্টমাইজেশন / Options")
-
-# ভাষা নির্বাচন
+st.sidebar.header("⚙️ অপশনস / Sidebar Settings")
 lang = st.sidebar.selectbox("ভাষা / Language", ["বাংলা", "English", "দ্বিভাষিক (Bilingual)"])
 
-# ভাষার ওপর নির্ভর করে ইন্টারফেসের লেখা পরিবর্তন (Dynamic UI Text)
 if lang == "English":
-    lbl_subject = "Subject"
-    lbl_class = "Enter Class (5 to 12)"
-    lbl_diff = "Difficulty Level"
-    lbl_qtype = "Question Type"
-    lbl_ocr_lang = "OCR Language (If image used)"
-    lbl_num_q = "Number of Questions"
-    lbl_text_input = "Paste your study material or ask anything here:"
-    lbl_upload = "Or upload image of material (JPG/PNG):"
-    lbl_custom = "Special Instructions (Optional):"
-    lbl_btn = "Generate MCQ 🚀"
-    lbl_msg_low_class = "⚠️ This app is meant for Class 5 to Class 12."
-    lbl_msg_high_class = "⚠️ Only Class 5 to Class 12 supported."
-    lbl_msg_invalid_class = "💡 Please enter digits only (e.g., 7, 8, 10)."
+    lbl_subject, lbl_class = "Subject", "Enter Class (5 to 12)"
+    lbl_diff, lbl_qtype = "Difficulty Level", "Question Type"
+    lbl_text_input = "Paste study material or ask anything here:"
+    lbl_upload = "Or upload images (Multiple supported JPG/PNG):"
+    lbl_btn = "Generate Output 🚀"
 else:
-    lbl_subject = "বিষয় (Subject)"
-    lbl_class = "শ্রেণী লিখুন (Class 5 থেকে 12)"
-    lbl_diff = "কঠিনতার মাত্রা"
-    lbl_qtype = "প্রশ্নের ধরন"
-    lbl_ocr_lang = "OCR পড়ার ভাষা (ছবি থাকলে)"
-    lbl_num_q = "প্রশ্নের সংখ্যা লিখুন"
+    lbl_subject, lbl_class = "বিষয় (Subject)", "শ্রেণী লিখুন (Class 5 থেকে 12)"
+    lbl_diff, lbl_qtype = "কঠিনতার মাত্রা", "প্রশ্নের ধরন"
     lbl_text_input = "পড়াটি পেস্ট করুন বা যেকোনো প্রশ্ন লিখুন:"
-    lbl_upload = "অথবা পড়ার ছবি তুলে আপলোড করুন (JPG/PNG):"
-    lbl_custom = "বিশেষ নির্দেশ (ঐচ্ছিক):"
-    lbl_btn = "MCQ তৈরি করুন 🚀"
-    lbl_msg_low_class = "⚠️ এই অ্যাপটি মূলত ৫ম থেকে ১২শ শ্রেণীর জন্য প্রযোজ্য।"
-    lbl_msg_high_class = "⚠️ শুধুমাত্র Class 5 থেকে Class 12 পর্যন্ত প্রযোজ্য।"
-    lbl_msg_invalid_class = "💡 অনুগ্রহ করে ক্লাসের শুধু সংখ্যাটি লিখুন (যেমন: 7, 8, 10)।"
+    lbl_upload = "অথবা একাধিক ছবি আপলোড করুন (JPG/PNG):"
+    lbl_btn = "আউটপুট তৈরি করুন 🚀"
 
 subject = st.sidebar.selectbox(lbl_subject, ["ইতিহাস / History", "ভূগোল / Geography", "জীবনবিজ্ঞান / Life Science", "গণিত / Math", "বাংলা / Bengali", "ইংরেজি / English"])
-
-# ক্লাস হাতে লেখার ইনপুট ও ভ্যালিডেশন
 class_num_input = st.sidebar.text_input(lbl_class, value="7")
-cls = f"Class {class_num_input}"
+
+# Class Validation Logic
 try:
-    c_num = int(class_num_input.strip())
-    if c_num < 5:
-        st.sidebar.warning(lbl_msg_low_class)
-    elif c_num > 12:
-        st.sidebar.warning(lbl_msg_high_class)
+    cls_val = int(class_num_input.strip())
+    if cls_val < 5 or cls_val > 12:
+        st.sidebar.warning("⚠️ শ্রেণী সাধারণত Class 5 থেকে 12 এর মধ্যে রাখা ভালো।")
 except ValueError:
-    st.sidebar.info(lbl_msg_invalid_class)
+    st.sidebar.warning("⚠️ শ্রেণীর ঘরে সঠিক সংখ্যা লিখুন (যেমন: 7)।")
+
+cls = f"Class {class_num_input.strip()}"
 
 difficulty = st.sidebar.selectbox(lbl_diff, ["সহজ / Easy", "মাঝারি / Medium", "কঠিন / Hard"])
 q_type = st.sidebar.selectbox(lbl_qtype, ["MCQ", "True/False", "Fill in the blanks", "Short Answer"])
-
-ocr_lang_choice = st.sidebar.radio(lbl_ocr_lang, ["বাংলা (ben)", "English (eng)"])
-ocr_lang_code = "ben" if "ben" in ocr_lang_choice else "eng"
+ocr_lang_code = "ben" if "বাংলা" in lang else "eng"
 
 bloom = st.sidebar.selectbox("Bloom's Taxonomy", ["Knowledge", "Understanding", "Application", "Analysis"])
-num_questions_str = st.sidebar.text_input(lbl_num_q, value="10")
+num_questions_str = st.sidebar.text_input("প্রশ্নের সংখ্যা", value="10")
 temperature_mode = st.sidebar.select_slider("AI Mode", options=["Accurate", "Balanced", "Creative"], value="Balanced")
 temp_map = {"Accurate": 0.2, "Balanced": 0.7, "Creative": 1.0}
 
-# ইনপুট সেকশন
+# Main Form Area
 text_input = st.text_area(lbl_text_input, height=150)
-uploaded_file = st.file_uploader(lbl_upload, type=["jpg", "jpeg", "png"])
-custom_instruction = st.text_input(lbl_custom)
+uploaded_files = st.file_uploader(lbl_upload, type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+custom_instruction = st.text_input("বিশেষ নির্দেশ (ঐচ্ছিক):")
 
 if st.button(lbl_btn, use_container_width=True):
-    final_text = ""
-    
+    combined_ocr_text = ""
     progress_bar = st.progress(0)
     status_text = st.empty()
     
@@ -154,38 +114,36 @@ if st.button(lbl_btn, use_container_width=True):
     except ValueError:
         num_questions = 10
 
-    if uploaded_file:
+    # Process Multiple Images
+    if uploaded_files:
         if not ocr_api_key:
-            st.error("⚠️ OCR_API_KEY পাওয়া যায়নি / OCR_API_KEY missing!")
+            st.error("⚠️ OCR_API_KEY পাওয়া যায়নি!")
             st.stop()
             
-        status_text.text("📷 Reading text from image (OCR)...")
-        progress_bar.progress(30)
-        
-        ocr_text, status = ocr_space_file(uploaded_file, ocr_api_key, language=ocr_lang_code)
-        
-        if status == "LIMIT_EXCEEDED":
-            st.error("⚠️ OCR daily limit exceeded! Please paste raw text.")
-            progress_bar.empty()
-            status_text.empty()
-            st.stop()
-        elif status == "LOW_CONFIDENCE":
-            st.warning("⚠️ Low text detected from image.")
-            final_text = ocr_text
-        elif ocr_text:
-            final_text = ocr_text
-            st.success("✅ OCR text extraction complete!")
-        else:
-            st.error("Could not read text from image.")
-            progress_bar.empty()
-            status_text.empty()
-            st.stop()
+        for idx, file in enumerate(uploaded_files):
+            status_text.text(f"📷 Extracting text from image {idx+1}/{len(uploaded_files)}...")
+            progress_bar.progress(int((idx + 1) / len(uploaded_files) * 40))
             
-    elif text_input:
+            ocr_text, status = ocr_space_file(file, ocr_api_key, language=ocr_lang_code)
+            
+            if status == "SUCCESS":
+                combined_ocr_text += f"\n=== Image {idx+1} Text ===\n" + ocr_text + "\n"
+            elif status == "LIMIT_EXCEEDED":
+                st.error(f"⚠️ ছবি {idx+1}: OCR Free Limit শেষ হয়ে গেছে।")
+            elif status == "LOW_CONFIDENCE":
+                st.warning(f"⚠️ ছবি {idx+1}: ছবির লেখা খুব আবছা।")
+                combined_ocr_text += f"\n=== Image {idx+1} Text ===\n" + ocr_text + "\n"
+            elif status == "NO_TEXT":
+                st.warning(f"⚠️ ছবি {idx+1}: কোনো পড়া খুঁজে পাওয়া যায়নি।")
+            else:
+                st.error(f"⚠️ ছবি {idx+1}: OCR সার্ভারে সংযোগের সমস্যা।")
+                
+        final_text = combined_ocr_text
+    else:
         final_text = text_input
 
-    if final_text:
-        status_text.text("🤖 AI is processing...")
+    if final_text.strip():
+        status_text.text("🤖 AI Processing...")
         progress_bar.progress(70)
         
         try:
@@ -203,50 +161,69 @@ if st.button(lbl_btn, use_container_width=True):
             output_text = response.choices[0].message.content
             st.session_state['last_mcq'] = output_text
             
+            # Save History
+            st.session_state['history'].append({"subject": subject, "text": output_text})
+            st.session_state['history'] = st.session_state['history'][-20:]
+            
             progress_bar.progress(100)
-            status_text.text("✅ Ready!")
+            status_text.text("✅ সম্পূর্ণ হয়েছে!")
             progress_bar.empty()
             status_text.empty()
             
-        except Exception:
-            st.error("⚠️ Error generating response. Please try again.")
+        except Exception as e:
+            logging.exception("Groq API Call Error")
+            st.error("⚠️ AI সার্ভিস থেকে রেসপন্স পেতে সমস্যা হয়েছে।")
             progress_bar.empty()
             status_text.empty()
     else:
-        st.warning("Please provide text or upload an image.")
+        st.warning("অনুগ্রহ করে কোনো পড়া পেস্ট করুন অথবা ছবি আপলোড করুন।")
 
-# আউটপুট প্রদর্শনের অংশ
+# Display Result & Export
 if 'last_mcq' in st.session_state:
     full_output = st.session_state['last_mcq']
     
-    # সাধারণ কথাবার্তা হলে সরাসরি উত্তর দেখাবে, আর প্রশ্নপত্র তৈরি হলে উত্তরমালা আলাদা দেখাবে
     if "---ANSWER_KEY---" in full_output:
         parts = full_output.split("---ANSWER_KEY---")
-        questions_part = parts[0]
-        answers_part = parts[1]
+        questions_part, answers_part = parts[0], parts[1]
     else:
-        questions_part = full_output
-        answers_part = None
+        questions_part, answers_part = full_output, None
 
-    st.success("✅ Output Generated Successfully!")
+    st.success("✅ আপনার রেসপন্স প্রস্তুত!")
     
-    st.markdown("### 📄 Result / Response")
-    st.write(questions_part)
+    st.markdown("### 📄 Response / Question Paper")
+    st.markdown(questions_part)
     
+    st.markdown("#### 📋 One-Click Copy Text")
     st.code(questions_part, language="text")
     
     if answers_part:
         with st.expander("👁️ View Answer Key & Explanations"):
             st.markdown(answers_part)
             
-        st.write("---")
-        with st.expander("📝 Quiz Mode"):
-            st.info("Test your knowledge interactively:")
-            q_sample = st.radio("Select the correct option:", ["Option A", "Option B", "Option C", "Option D"])
-            if st.button("Submit Answer"):
-                st.success("🎉 Answer Submitted!")
+    st.write("---")
+    st.subheader("📥 Export File")
+    
+    docx_path = create_docx(full_output, subject=subject, cls=cls)
+    
+    with open(docx_path, "rb") as fp:
+        st.download_button(
+            label="📄 Download DOCX", 
+            data=fp, 
+            file_name=f"{subject}_{cls}_Questions.docx", 
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True
+        )
+    
+    # Safe Temporary File Clean Up
+    try:
+        os.remove(docx_path)
+    except Exception:
+        pass
 
-        st.subheader("📥 Export File")
-        docx_file = create_docx(full_output, subject=subject, cls=cls)
-        with open(docx_file, "rb") as fp:
-            st.download_button(label="📄 Download DOCX", data=fp, file_name="MCQs.docx", use_container_width=True)
+# Session History Display
+if st.session_state['history']:
+    st.write("---")
+    with st.expander("📜 Session History (সর্বশেষ ২০টি প্রশ্নপত্র)"):
+        for idx, item in enumerate(reversed(st.session_state['history'])):
+            st.markdown(f"**{idx+1}. Subject: {item['subject']}**")
+            st.caption(item['text'][:150] + "...")
