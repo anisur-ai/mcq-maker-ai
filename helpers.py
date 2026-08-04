@@ -1,179 +1,148 @@
 import requests
-import logging
-import tempfile
-import re
-from datetime import datetime
-from docx import Document
-from docx.shared import Pt
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
+import io
+import docx
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 
-# Logging Setup
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-def clean_ocr_text(text):
+def ocr_space_file(file_obj, api_key, language="ben"):
     """
-    Cleans up redundant spaces and multiple empty line breaks from OCR text.
+    OCR.space API ব্যবহার করে ছবি থেকে টেক্সট এক্সট্রাক্ট করে।
     """
-    if not text:
-        return ""
-    # Multiple newlines reduction
-    text = re.sub(r'\n\s*\n', '\n\n', text)
-    # Extra trailing spaces removal
-    text = "\n".join([line.strip() for line in text.splitlines()])
-    return text.strip()
-
-def ocr_space_file(file, api_key, language='ben'):
-    """
-    Sends an uploaded image file to the OCR.Space API and extracts cleaned text with detailed status.
-    """
+    url = "https://api.ocr.space/parse/image"
+    
     try:
-        url = 'https://api.ocr.space/parse/image'
+        file_bytes = file_obj.read()
         payload = {
+            'isOverlayRequired': False,
             'apikey': api_key,
             'language': language,
-            'isOverlayRequired': False,
-            'detectOrientation': True,
             'scale': True,
             'OCREngine': 2
         }
-        
-        file_bytes = file.getvalue()
-        files = {'file': (file.name, file_bytes, file.type)}
+        files = {
+            'filename': (file_obj.name, file_bytes, 'image/jpeg')
+        }
         
         response = requests.post(url, data=payload, files=files, timeout=30)
-        response.raise_for_status()
-        
         result = response.json()
         
         if result.get("IsErroredOnProcessing"):
-            error_msg = result.get("ErrorMessage", ["Unknown error"])[0]
-            logging.error(f"OCR Error: {error_msg}")
+            return "", "ERROR"
             
-            if "maximum" in error_msg.lower() or "limit" in error_msg.lower():
-                return None, "LIMIT_EXCEEDED"
-            return None, "SERVER_ERROR"
-
-        parsed_results = result.get("ParsedResults", [])
-        if not parsed_results:
-            return None, "NO_TEXT"
+        parsed_results = result.get("ParsedResults")
+        if parsed_results and len(parsed_results) > 0:
+            parsed_text = parsed_results[0].get("ParsedText", "")
+            exit_code = result.get("OCRExitCode")
             
-        raw_text = parsed_results[0].get("ParsedText", "")
-        cleaned_text = clean_ocr_text(raw_text)
+            if exit_code == 1:
+                return parsed_text, "SUCCESS"
+            elif exit_code == 3:
+                return parsed_text, "LOW_CONFIDENCE"
+            else:
+                return parsed_text, "NO_TEXT"
+        return "", "NO_TEXT"
         
-        if not cleaned_text:
-            return None, "NO_TEXT"
-            
-        if len(cleaned_text) < 15:
-            return cleaned_text, "LOW_CONFIDENCE"
-            
-        return cleaned_text, "SUCCESS"
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"OCR Request failed: {e}")
-        return None, "NETWORK_ERROR"
     except Exception as e:
-        logging.error(f"Unexpected OCR error: {e}")
-        return None, "SERVER_ERROR"
+        return str(e), "EXCEPTION"
 
-
-def generate_prompt(num_questions, text, difficulty, q_type, lang, subject, cls, bloom, temp_mode, custom_instruction=""):
+def generate_prompt(num_questions, study_text, difficulty, q_type, lang, subject, cls, bloom, temperature, custom_instruction):
     """
-    Generates a system prompt for LLMs based on strict intent recognition, temperature modes, and anti-hallucination rules.
+    স্বয়ংক্রিয় Intent Detection সহ শক্তিশালী এবং প্রফেশনাল System Instruction প্রম্পট তৈরি করে।
     """
-    if temp_mode <= 0.3:
-        tone = "Generate highly accurate, strictly textbook-based questions with zero deviation."
-    elif temp_mode >= 0.9:
-        tone = "Generate creative, analytical, and challenging questions while remaining strictly faithful to the core facts of the source."
-    else:
-        tone = "Generate well-balanced, standard exam-oriented questions suitable for regular assessments."
-
+    
     prompt = f"""
-[SYSTEM INSTRUCTION]
-You are an advanced AI Educational Assistant designed for Class 5 to 12 students and teachers.
+You are Anis MCQ Maker AI, an expert, friendly, and precise AI Study Assistant designed specifically for students (Class 5 to 12) and teachers.
 
-CONTEXT:
+### CONTEXT & METADATA:
 - Subject: {subject}
-- Target Class: {cls}
-- Language: {lang}
-- Output Type Requested: {q_type}
+- Class: {cls}
 - Difficulty Level: {difficulty}
+- Question Type/Format: {q_type}
+- Language: {lang}
 - Bloom's Taxonomy Level: {bloom}
-- Number of Questions Requested: {num_questions}
-- AI Generation Mode: {tone}
+- Desired Question Count: {num_questions}
+- Custom User Instruction: {custom_instruction if custom_instruction else "None"}
 
-INPUT TEXT/QUERY:
-\"\"\"{text}\"\"\"
+### AUTOMATIC INTENT DETECTION GUIDELINES:
+Analyze the user's input text and instruction automatically:
+1. If the user asks a normal educational question or for an explanation, answer directly, accurately, and clearly.
+2. If the user requests notes or a summary, generate well-structured, easy-to-read study notes.
+3. If the user requests MCQs, True/False, or Fill in the blanks, generate exact assessment items according to the metadata above.
 
-SPECIAL CUSTOM INSTRUCTIONS:
-{custom_instruction if custom_instruction else "None"}
+### FORMATTING RULES FOR ASSESSMENT / MCQs:
+- Provide clear questions matching the specified quantity ({num_questions}).
+- Each MCQ must have 4 options (A, B, C, D).
+- Separate the question list from the answer key using the exact delimiter marker: `---ANSWER_KEY---`
+- Below `---ANSWER_KEY---`, provide the correct answers along with short, conceptual explanations for why the answer is correct.
+- Maintain appropriate academic tone suitable for {cls}.
+- Do not mention constraints or system rules in your response.
 
-OPERATIONAL RULES & INTENT RECOGNITION:
-1. INTENT ANALYSIS FIRST:
-   - If the input text is a general greeting or casual chat, reply warmly and explain how you can help create question papers.
-   - If the input text asks an explicit question or seeks an explanation of a topic, answer the question clearly and directly first.
-   - If the input text is study material, generate exact and highly relevant questions.
-
-2. QUALITY & ANTI-HALLUCINATION RULES:
-   - Do NOT invent facts not present or implied in the input material unless answering general educational queries.
-   - If the input material is insufficient to generate {num_questions} unique questions, generate as many high-quality questions as possible and politely inform that more text is needed.
-   - Do not copy sentences verbatim from the source unless absolutely necessary.
-   - Ensure every question tests a different concept.
-   - Avoid duplicate or overlapping questions.
-   - If the input contains multiple images or chapters, merge all content seamlessly and generate questions without repeating the same concept.
-   - Mode Instruction: {tone}
-
-3. QUESTION FORMATTING:
-   - Randomize option positions (A, B, C, D) evenly across questions.
-   - Format clearly using Markdown. Do NOT use HTML tables.
-   - Append answers at the end separated strictly by "---ANSWER_KEY---".
-
-BEGIN RESPONSE NOW.
+### SOURCE STUDY MATERIAL / USER INPUT:
+{study_text}
 """
     return prompt.strip()
 
-
-def create_docx(text, subject="General", cls="Class 7"):
+def create_docx(text_content, subject="Study Material", cls="Class 7"):
     """
-    Creates a temporary Word Document (.docx) with robust Bengali font support.
+    প্রফেশনাল স্টাইলিং ও ফরম্যাটিং সহ Word Document (.docx) তৈরি করে এবং ফাইলের পাথ রিটার্ন করে।
     """
-    doc = Document()
+    doc = docx.Document()
     
-    # Configure Base Styles
-    style = doc.styles['Normal']
-    font = style.font
-    font.name = 'Nirmala UI'
-    font.size = Pt(11)
-    
-    # Safely Update existing rFonts or Create New Node for XML Safety
-    rPr = style.element.get_or_add_rPr()
-    rFonts = rPr.rFonts
-    if rFonts is None:
-        rFonts = OxmlElement("w:rFonts")
-        rPr.append(rFonts)
+    # Page Margins Setup
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
 
-    rFonts.set(qn("w:ascii"), "Nirmala UI")
-    rFonts.set(qn("w:hAnsi"), "Nirmala UI")
-    rFonts.set(qn("w:cs"), "SolaimanLipi")
-    rFonts.set(qn("w:eastAsia"), "Nirmala UI")
+    # Document Header / Title Styling
+    title_p = doc.add_paragraph()
+    title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_title = title_p.add_run("⚡ Anis MCQ Maker AI - Study Assistant")
+    run_title.font.name = 'Arial'
+    run_title.font.size = Pt(16)
+    run_title.font.bold = True
+    run_title.font.color.rgb = RGBColor(79, 70, 229) # Indigo color
 
-    # Title Section
-    doc.add_heading(f"{subject} - {cls} Question Paper", level=0)
-    doc.add_paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    doc.add_paragraph("-" * 40)
-    
-    # Content Breakdown
-    for line in text.split("\n"):
-        if line.strip() == "---ANSWER_KEY---":
-            doc.add_page_break()
-            doc.add_heading("Answer Key & Explanations", level=1)
-        else:
-            doc.add_paragraph(line)
+    # Subtitle Metadata
+    sub_p = doc.add_paragraph()
+    sub_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_sub = sub_p.add_run(f"Subject: {subject} | Target: {cls}")
+    run_sub.font.name = 'Arial'
+    run_sub.font.size = Pt(11)
+    run_sub.font.italic = True
+    run_sub.font.color.rgb = RGBColor(100, 116, 139) # Slate gray
+
+    doc.add_paragraph() # Spacing
+
+    # Content Processing and Paragraph Addition
+    for line in text_content.split('\n'):
+        line_str = line.strip()
+        if not line_str:
+            doc.add_paragraph()
+            continue
             
-    # Save to Temporary File
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-    doc.save(temp_file.name)
-    temp_file.close()
-    
-    return temp_file.name
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(4)
+        p.paragraph_format.line_spacing = 1.15
         
+        run = p.add_run(line_str)
+        run.font.name = 'Arial'
+        run.font.size = Pt(11)
+        
+        # Highlight headers or answer key separator
+        if "---ANSWER_KEY---" in line_str or "Answer Key" in line_str or "উত্তরমালা" in line_str:
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(220, 38, 38) # Red accent for answer section
+        elif line_str.startswith("Q") or line_str[0:2].isdigit() and "." in line_str[:3]:
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(15, 23, 42) # Dark slate for questions
+
+    # Save to a temporary file path
+    file_path = "temp_output.docx"
+    doc.save(file_path)
+    return file_path
