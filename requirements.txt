@@ -1,5 +1,7 @@
 streamlit
-groq
-python-docx
-fpdf
 requests
+python-docx
+google-generativeai
+openai
+groq
+
