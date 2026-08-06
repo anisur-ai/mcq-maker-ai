@@ -368,13 +368,4 @@ Rules:
         "role": "assistant",
         "content": error_message,
     }
-)
-
-                    
-                
-        
-
-
-
-
-)
+            )            
