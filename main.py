@@ -1,120 +1,152 @@
 import streamlit as st
-from helpers import ocr_space_file, generate_prompt, four_layer_ai_fallback, create_docx
+import re
+from helpers import (
+    smart_read_file, 
+    needs_web_search, 
+    smart_search, 
+    smart_scrape, 
+    select_model_by_task, 
+    manage_conversation_memory, 
+    provider_aware_ai_fallback
+)
 
 # Page Configuration
-st.set_page_config(page_title="Anis MCQ Maker AI", page_icon="⚡", layout="wide")
+st.set_page_config(
+    page_title="Anis AI",
+    page_icon="🤖",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
 
-# Load API Keys from Secrets Dictionary
+# Clean ChatGPT Styling & Hide Sidebar
+st.markdown("""
+    <style>
+    [data-testid="collapsedControl"] {display: none;}
+    .stChatMessage {background-color: transparent !important;}
+    </style>
+""", unsafe_allow_html=True)
+
+# API Keys Configuration
 keys_dict = {
     "groq": st.secrets.get("GROQ_API_KEY"),
     "gemini": st.secrets.get("GEMINI_API_KEY"),
     "mistral": st.secrets.get("MISTRAL_API_KEY"),
-    "openrouter": st.secrets.get("OPENROUTER_API_KEY")
+    "openrouter": st.secrets.get("OPENROUTER_API_KEY"),
+    "tavily": st.secrets.get("TAVILY_API_KEY"),
+    "firecrawl": st.secrets.get("FIRECRAWL_API_KEY"),
+    "jina": st.secrets.get("JINA_API_KEY")
 }
 ocr_api_key = st.secrets.get("OCR_API_KEY")
 
-# App Header
-st.title("⚡ Anis MCQ Maker AI")
-st.markdown("Your Smart Study Assistant")
+# Header (Clean & Professional)
+st.markdown("<h1 style='text-align: center; color: #1f2937; margin-bottom: 0px;'>Anis AI</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #6b7280; font-size: 16px; margin-top: 5px;'>How can I help you today?</p>", unsafe_allow_html=True)
+st.write("")
 
-# Sidebar Controls
-st.sidebar.header("⚙️ Configuration")
+# Initialize Session States
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "chat_summary" not in st.session_state:
+    st.session_state.chat_summary = ""
 
-subject = st.sidebar.text_input("Subject", "History")
-cls = st.sidebar.selectbox("Class Level", ["Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"])
-difficulty = st.sidebar.selectbox("Difficulty", ["Easy", "Medium", "Hard", "Expert"])
-q_type = st.sidebar.selectbox("Question Type", ["MCQ (4 Options)", "True/False", "Fill in the Blanks", "Short Questions"])
-num_questions = st.sidebar.slider("Number of Questions", 1, 25, 5)
-lang = st.sidebar.selectbox("Language", ["Bengali", "English"])
-bloom = st.sidebar.selectbox("Bloom's Taxonomy", ["Remembering", "Understanding", "Applying", "Analyzing"])
+# Display Chat History
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-custom_instruction = st.sidebar.text_area("Custom Instructions (Optional)", "")
+# File Uploader (Hidden/Clean interface component)
+uploaded_file = st.file_uploader("Attach file", type=["jpg", "jpeg", "png", "pdf", "txt", "docx"], label_visibility="collapsed")
 
-# Main Input Section
-st.subheader("📖 Input Study Material")
-input_method = st.radio("Choose Input Method", ["Text Input", "Upload Image / OCR"])
+if prompt := st.chat_input("Message Anis AI..."):
+    # Append user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-study_text = ""
+    collected_sources = []
+    file_context = ""
+    external_context = ""
 
-if input_method == "Text Input":
-    study_text = st.text_area("Paste your textbook chapter or notes here:", height=200)
-else:
-    uploaded_file = st.file_uploader("Upload an image of your book/notes", type=["jpg", "jpeg", "png"])
+    # 1. Automatic File Reading / OCR
     if uploaded_file is not None:
-        st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
-        if st.button("Extract Text (OCR)"):
-            if not ocr_api_key:
-                st.error("OCR API Key missing in secrets!")
-            else:
-                with st.spinner("Extracting text from image..."):
-                    extracted_text, status = ocr_space_file(uploaded_file, ocr_api_key, language="ben" if lang=="Bengali" else "eng")
-                    if status in ["SUCCESS", "LOW_CONFIDENCE"]:
-                        study_text = extracted_text
-                        st.success("Text extracted successfully!")
-                        st.text_area("Extracted Text Preview:", study_text, height=150)
-                    else:
-                        st.error(f"OCR Failed with status: {status}")
+        file_context = smart_read_file(uploaded_file, ocr_api_key)
+        if file_context:
+            file_context = f"\n\n--- ATTACHED FILE CONTENT ---\n{file_context}"
 
-# Generate Button Action
-if st.button("🚀 Generate Content / MCQs", type="primary"):
-    if not study_text.strip():
-        st.warning("Please provide some study material or text first!")
+    # 2. Autonomous Intent Flow (URL -> Scrape else LLM Search Decision)
+    url_match = re.search(r'https?://[^\s]+', prompt)
+    
+    if url_match:
+        target_url = url_match.group(0)
+        scraped_text, collected_sources = smart_scrape(target_url, keys_dict.get("firecrawl"), keys_dict.get("jina"))
+        external_context = f"\n\n--- URL CONTENT ---\n{scraped_text}"
     else:
-        # Prompt Generation
-        final_prompt = generate_prompt(
-            num_questions=num_questions,
-            study_text=study_text,
-            difficulty=difficulty,
-            q_type=q_type,
-            lang=lang,
-            subject=subject,
-            cls=cls,
-            bloom=bloom,
-            custom_instruction=custom_instruction
-        )
+        # Check if live search is genuinely needed using LLM intent classifier
+        should_search = needs_web_search(prompt, keys_dict.get("groq"))
+        if should_search:
+            search_text, collected_sources = smart_search(prompt, keys_dict.get("tavily"), keys_dict.get("jina"))
+            if search_text:
+                external_context = f"\n\n--- LIVE WEB SEARCH RESULTS ---\n{search_text}"
 
-        messages = [
-            {"role": "system", "content": "You are a helpful and expert AI study assistant."},
-            {"role": "user", "content": final_prompt}
-        ]
+    # 3. Dynamic Task-Based Model Routing
+    router_info = select_model_by_task(prompt, file_context + external_context)
 
-        st.subheader("✨ Generated Output:")
-        response_container = st.empty()
-        full_output = ""
-        has_error = False  # এরর স্ট্যাটাস ট্র্যাক করার জন্য ফ্ল্যাগ
+    # 4. Incremental Memory Management
+    st.session_state.chat_summary, managed_messages = manage_conversation_memory(
+        st.session_state.messages, 
+        keys_dict.get("groq"), 
+        st.session_state.chat_summary
+    )
+
+    # 5. Powerful Professional System Prompt
+    system_prompt = """
+You are Anis AI, a world-class, professional, and autonomous AI assistant.
+- Decide and execute everything automatically and internally.
+- Never expose tools, internal steps, routing logic, or fallback mechanisms to the user.
+- Think step by step internally.
+- Answer naturally, clearly, and concisely unless asked for detailed explanations.
+- Detect language automatically and always prefer Bengali if the user writes in Bengali.
+- If external information (web search or URLs) was used, you MUST cite the sources clearly at the very end under a 'Sources' heading with clean URLs. If no external search was performed, do NOT include a Sources section.
+"""
+
+    ai_messages = [{"role": "system", "content": system_prompt}]
+    for m in managed_messages[:-1]:
+        ai_messages.append({"role": m["role"], "content": m["content"]})
+    
+    final_user_input = prompt + file_context + external_context
+    ai_messages.append({"role": "user", "content": final_user_input})
+
+    # 6. Stream Response with Silent Failover & Clean UI
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        full_response = ""
+        has_error = False
 
         try:
-            with st.spinner("Processing your request..."):
-                default_primary_model = "llama-3.3-70b-versatile"
-                
-                stream_generator = four_layer_ai_fallback(
-                    keys_dict=keys_dict,
-                    selected_model=default_primary_model,
-                    messages=messages,
-                    max_tokens=4096
-                )
+            stream_gen = provider_aware_ai_fallback(keys_dict, router_info, ai_messages)
+            for chunk in stream_gen:
+                if chunk.startswith("দুঃখিত") or chunk == "ERROR_ALL_FAILED":
+                    has_error = True
+                    full_response = "দুঃখিত কিছুক্ষণ অপেক্ষা করুন টেকনিক্যাল সমস্যা হয়েছে ঠিক করা হচ্ছে"
+                    break
+                full_response += chunk
+                response_placeholder.markdown(full_response + "▌")
 
-                for chunk in stream_generator:
-                    delta = chunk.choices[0].delta.content
-                    full_output += delta
-                    response_container.markdown(full_output + "▌")
-                    
-                    # যদি chunk.is_error True হয়, তাহলে ফ্ল্যাগ সেট হবে
-                    if getattr(chunk, "is_error", False):
-                        has_error = True
+            if has_error or not full_response:
+                error_msg = "দুঃখিত কিছুক্ষণ অপেক্ষা করুন টেকনিক্যাল সমস্যা হয়েছে ঠিক করা হচ্ছে"
+                response_placeholder.markdown(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            else:
+                # Append Sources ONLY if external sources exist
+                if collected_sources:
+                    full_response += "\n\n**Sources**\n"
+                    for src in set(collected_sources):
+                        full_response += f"- {src}\n"
 
-                response_container.markdown(full_output)
+                response_placeholder.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-            # Word Document Download Option (ফ্ল্যাগ ফলস থাকলেই কেবল ডাউনলোড বাটন দেখাবে)
-            if full_output and not has_error:
-                docx_path = create_docx(full_output, subject=subject, cls=cls)
-                with open(docx_path, "rb") as file:
-                    st.download_button(
-                        label="📥 Download as Word Document (.docx)",
-                        data=file,
-                        file_name=f"{subject}_{cls}_MCQs.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    )
-
-        except Exception as e:
-            pass
+        except Exception:
+            error_msg = "দুঃখিত কিছুক্ষণ অপেক্ষা করুন টেকনিক্যাল সমস্যা হয়েছে ঠিক করা হচ্ছে"
+            response_placeholder.markdown(error_msg)
+            st.session_state.messages.append({"role": "assistant", "content": error_msg})
