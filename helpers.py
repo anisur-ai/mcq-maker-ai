@@ -8,7 +8,6 @@ from openai import OpenAI
 from groq import Groq
 from PIL import Image
 
-# --- 1. Advanced File Reader & Smart PDF/OCR Processing ---
 def smart_read_file(uploaded_file, ocr_api_key):
     if uploaded_file is None:
         return ""
@@ -76,9 +75,7 @@ def ocr_space_file(file_obj, api_key, language="eng+ben"):
         print(f"OCR Error: {e}")
     return ""
 
-# --- 2. AI-Powered Intent Detector (Zero Keyword List) ---
 def needs_web_search(prompt, api_key):
-    """Uses LLM to autonomously decide if live internet search is needed."""
     try:
         client = Groq(api_key=api_key)
         response = client.chat.completions.create(
@@ -96,7 +93,6 @@ def needs_web_search(prompt, api_key):
         print(f"Intent detector error: {e}")
         return False
 
-# --- 3. Multi-Search Fallback ---
 def smart_search(query, tavily_key, jina_key):
     if tavily_key:
         try:
@@ -131,7 +127,6 @@ def smart_search(query, tavily_key, jina_key):
 
     return "", []
 
-# --- 4. URL Scraper ---
 def smart_scrape(url_to_scrape, firecrawl_key, jina_key):
     if firecrawl_key:
         try:
@@ -159,28 +154,22 @@ def smart_scrape(url_to_scrape, firecrawl_key, jina_key):
     
     return "Could not extract content from URL.", []
 
-# --- 5. Task-Based Advanced Model Router ---
 def select_model_by_task(query, file_content):
     total_len = len(query) + len(file_content)
     q_lower = query.lower()
 
-    # Coding / Technical -> DeepSeek via OpenRouter
     if any(k in q_lower for k in ["code", "python", "javascript", "function", "script", "bug", "sql", "html", "css", "কোড", "প্রোগ্রাম"]):
         return {"provider": "openrouter", "model": "deepseek/deepseek-chat"}
     
-    # Math / Scientific calculation -> Groq Llama 70B
     if any(k in q_lower for k in ["math", "calculate", "equation", "formula", "physics", "chemistry", "গণিত", "সূত্র"]):
         return {"provider": "groq", "model": "llama-3.3-70b-versatile"}
     
-    # Long files / huge text -> Gemini
     if total_len > 4000:
         return {"provider": "gemini", "model": "gemini-2.5-flash"}
     
-    # Creative writing / Detailed explanations -> Llama 70B
     if total_len > 300 or len(query.split()) > 40:
         return {"provider": "groq", "model": "llama-3.3-70b-versatile"}
     
-    # Simple / Translation / Short queries -> Llama 8B (Fast)
     return {"provider": "groq", "model": "llama-3.1-8b-instant"}
 
 def truncate_text(text, max_chars=10000):
@@ -188,9 +177,7 @@ def truncate_text(text, max_chars=10000):
         return text[:max_chars] + "\n\n[Content truncated due to length limits...]"
     return text
 
-# --- 6. Incremental Persistent Memory Manager ---
 def manage_conversation_memory(messages, api_key, existing_summary=""):
-    """Maintains and updates a separate summary variable without overwriting blindly."""
     if len(messages) > 16:
         try:
             client = Groq(api_key=api_key)
@@ -203,13 +190,11 @@ def manage_conversation_memory(messages, api_key, existing_summary=""):
                 max_tokens=250
             ]
             updated_summary = response.choices[0].message.content.strip()
-            # Keep summary as system prompt + last 8 messages
             return updated_summary, [{"role": "system", "content": f"Ongoing Conversation Summary: {updated_summary}"}] + messages[-8:]
         except Exception as e:
             print(f"Memory error: {e}")
     return existing_summary, messages
 
-# --- 7. Silent Multi-Layer AI Fallback ---
 def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096):
     default_temp = 0.5
     preferred_provider = router_info["provider"]
@@ -270,4 +255,4 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
                 pass
 
     yield "দুঃখিত কিছুক্ষণ অপেক্ষা করুন টেকনিক্যাল সমস্যা হয়েছে ঠিক করা হচ্ছে"
-            
+    
