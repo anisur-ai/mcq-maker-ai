@@ -208,10 +208,9 @@ if prompt := st.chat_input("Message Anis AI..."):
 
             if search_text:
 
-                external_context = (
-                    "\n\n--- LIVE WEB SEARCH RESULTS ---\n"
-                    + search_text
-
+                external_context = f"\n\n--- LIVE WEB SEARCH RESULTS ---\n{search_text}"
+        
+            
     # -------------------------------
     # Model Router
     # -------------------------------
