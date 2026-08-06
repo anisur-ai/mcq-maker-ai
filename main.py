@@ -364,13 +364,17 @@ Rules:
             )
 
             st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": error_message,
-                }
-        )
-
-
+    {
+        "role": "assistant",
+        "content": error_message,
+    }
+)
 
                     
+                
+        
+
+
+
+
 )
