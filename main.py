@@ -221,16 +221,11 @@ if prompt := st.chat_input("Message Anis AI..."):
     )
 
     # -------------------------------
-    # Conversation Memory
-    # -------------------------------
+# Conversation Memory
+# -------------------------------
 
-    st.session_state.chat_summary, managed_messages = (
-        manage_conversation_memory(
-            st.session_state.messages,
-            keys_dict.get("groq"),
-            st.session_state.chat_summary,
-        )
-    )
+managed_messages = st.session_state.messages
+st.session_state.chat_summary = ""
 
     # -------------------------------
     # System Prompt
