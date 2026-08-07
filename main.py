@@ -247,13 +247,13 @@ if prompt := st.chat_input("Message Anis AI..."):
         "- If no external information was used, do not add Sources.\n"
     )
 
-    ai_messages = [
+    ai_messages = 
     ai_messages = [
         {
             "role": "system",
             "content": system_prompt,
         }
-    
+    ]
 
     for msg in managed_messages:
         ai_messages.append(msg)
