@@ -4,7 +4,6 @@ import docx
 import fitz  # PyMuPDF
 import pypdf
 import google.generativeai as genai
-
 from groq import Groq
 from openai import OpenAI
 
