@@ -220,21 +220,22 @@ if prompt := st.chat_input("Message Anis AI..."):
         file_context + external_context
     )
 
+        # -------------------------------
+    # Conversation Memory
     # -------------------------------
-# Conversation Memory
-# -------------------------------
 
-managed_messages = st.session_state.messages
-st.session_state.chat_summary = ""
+    managed_messages = st.session_state.messages
+    st.session_state.chat_summary = ""
 
     # -------------------------------
     # System Prompt
     # -------------------------------
 
     system_prompt = """
-You are Anis AI, a professional autonomous AI assistant.
-
-Rules:
+    You are Anis AI, a professional autonomous AI assistant.
+    """
+    
+    Rules:
 
 - Think internally before answering.
 - Never expose internal reasoning.
