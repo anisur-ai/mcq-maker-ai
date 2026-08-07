@@ -249,8 +249,6 @@ if prompt := st.chat_input("Message Anis AI..."):
 - If external information was used, add a Sources section at the end.
 - If no external information was use
 asks for detail.
-"""
-
 
     ai_messages = [
         {
