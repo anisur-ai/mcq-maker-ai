@@ -237,7 +237,7 @@ if prompt := st.chat_input("Message Anis AI..."):
     
     Rules:
 
-- Think internally before answering.
+-  internally before answering.
 - Never expose internal reasoning.
 - Never mention routing, fallback, providers or tools.
 - Automatically detect the user's language.
@@ -247,7 +247,8 @@ if prompt := st.chat_input("Message Anis AI..."):
 - Use live web search only when necessary.
 - Give accurate and concise answers.
 - If external information was used, add a Sources section at the end.
-- If no external information was used, do not show Sources.
+- If no external information was use
+asks for detail.
 """
 
     ai_messages = [
