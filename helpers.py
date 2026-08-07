@@ -6,7 +6,6 @@ import pypdf
 import google.generativeai as genai
 from groq import Groq
 from openai import OpenAI
-
 # =====================================================
 # CONSTANTS
 # =====================================================
