@@ -253,7 +253,7 @@ if prompt := st.chat_input("Message Anis AI..."):
             "role": "system",
             "content": system_prompt,
         }
-    ]
+    
 
     for msg in managed_messages:
         ai_messages.append(msg)
