@@ -900,7 +900,7 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
                         chunk.choices
                         and chunk.choices[0].delta
                         and chunk.choices[0].delta.content
-                    )
+                    ):
                         yield chunk.choices[0].delta.content
                 return
 
