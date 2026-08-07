@@ -240,7 +240,7 @@ if prompt := st.chat_input("Message Anis AI..."):
 -  internally before answering.
 - Never expose internal reasoning.
 - Never mention routing, fallback, providers or tools.
-- Automatically detect the user's language.
+- Automatically detect the user language.
 - Reply in Bengali if the user writes in Bengali.
 - Read attached files automatically.
 - Read URLs automatically.
