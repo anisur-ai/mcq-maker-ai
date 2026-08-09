@@ -21,6 +21,19 @@ st.set_page_config(
     page_icon="🤖",
     layout="centered",
     initial_sidebar_state="collapsed",
+    # -------------------------------
+# Usage Analytics
+# -------------------------------
+
+if "analytics_logged" not in st.session_state:
+    user_id = st.session_state.get("user_id")
+
+    if not user_id:
+        user_id = f"user_{id(st.session_state)}"
+        st.session_state.user_id = user_id
+
+    log_usage(user_id, event_type="visit")
+    st.session_state.analytics_logged = True
 )
 
 # -------------------------------
