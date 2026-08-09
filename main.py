@@ -1,6 +1,7 @@
 import streamlit as st
 import re
 
+from analytics import log_usage
 from helpers import (
     smart_read_file,
     needs_web_search,
