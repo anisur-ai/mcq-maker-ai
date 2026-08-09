@@ -1,30 +1,69 @@
-import streamlit as st
-from datetime import datetime
+import os
+from datetime import datetime, timezone, timedelta
+
+from supabase import create_client
 
 
-def track_event(event_name, details=None):
-    """Track a simple app event."""
+def get_supabase():
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+
+    if not url or not key:
+        return None
+
+    return create_client(url, key)
+
+
+def log_usage(user_id, event_type="visit", question_count=0):
+    supabase = get_supabase()
+
+    if supabase is None:
+        return False
+
+    now = datetime.now(timezone.utc).isoformat()
+
     try:
-        if "analytics_events" not in st.session_state:
-            st.session_state.analytics_events = []
+        existing = (
+            supabase
+            .table("usage_logs")
+            .select("*")
+            .eq("user_id", str(user_id))
+            .limit(1)
+            .execute()
+        )
 
-        st.session_state.analytics_events.append({
-            "event": event_name,
-            "details": details or {},
-            "timestamp": datetime.now().isoformat()
-        })
+        if existing.data:
+            row = existing.data[0]
+
+            new_count = int(row.get("question_count") or 0) + int(question_count)
+
+            (
+                supabase
+                .table("usage_logs")
+                .update({
+                    "last_active": now,
+                    "event_type": event_type,
+                    "question_count": new_count,
+                })
+                .eq("id", row["id"])
+                .execute()
+            )
+
+        else:
+            (
+                supabase
+                .table("usage_logs")
+                .insert({
+                    "user_id": str(user_id),
+                    "started_at": now,
+                    "last_active": now,
+                    "event_type": event_type,
+                    "question_count": int(question_count),
+                })
+                .execute()
+            )
+
+        return True
 
     except Exception:
-        # Analytics কখনো মূল app-কে বন্ধ করবে না
-        pass
-
-
-def get_events():
-    """Return stored analytics events."""
-    return st.session_state.get("analytics_events", [])
-
-
-def clear_events():
-    """Clear analytics events."""
-    if "analytics_events" in st.session_state:
-        st.session_state.analytics_events = []
+        return False
