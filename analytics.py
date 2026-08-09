@@ -1,20 +1,32 @@
-import os
-from datetime import datetime, timezone, timedelta
-
+import streamlit as st
+from datetime import datetime, timezone
 from supabase import create_client
 
 
-def get_supabase():
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
+# --------------------------------
+# Supabase Connection
+# --------------------------------
 
-    if not url or not key:
+def get_supabase():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+
+        if not url or not key:
+            return None
+
+        return create_client(url, key)
+
+    except Exception:
         return None
 
-    return create_client(url, key)
 
+# --------------------------------
+# Log User Activity
+# --------------------------------
 
 def log_usage(user_id, event_type="visit", question_count=0):
+
     supabase = get_supabase()
 
     if supabase is None:
@@ -23,7 +35,9 @@ def log_usage(user_id, event_type="visit", question_count=0):
     now = datetime.now(timezone.utc).isoformat()
 
     try:
-        existing = (
+
+        # Check whether this user already exists
+        result = (
             supabase
             .table("usage_logs")
             .select("*")
@@ -32,10 +46,21 @@ def log_usage(user_id, event_type="visit", question_count=0):
             .execute()
         )
 
-        if existing.data:
-            row = existing.data[0]
+        # --------------------------------
+        # Existing User
+        # --------------------------------
 
-            new_count = int(row.get("question_count") or 0) + int(question_count)
+        if result.data:
+
+            row = result.data[0]
+
+            old_count = int(
+                row.get("question_count") or 0
+            )
+
+            new_count = old_count + int(
+                question_count
+            )
 
             (
                 supabase
@@ -49,7 +74,12 @@ def log_usage(user_id, event_type="visit", question_count=0):
                 .execute()
             )
 
+        # --------------------------------
+        # New User
+        # --------------------------------
+
         else:
+
             (
                 supabase
                 .table("usage_logs")
@@ -58,12 +88,17 @@ def log_usage(user_id, event_type="visit", question_count=0):
                     "started_at": now,
                     "last_active": now,
                     "event_type": event_type,
-                    "question_count": int(question_count),
+                    "question_count": int(
+                        question_count
+                    ),
                 })
                 .execute()
             )
 
         return True
 
-    except Exception:
+    except Exception as e:
+
+        print("Analytics Error:", e)
+
         return False
