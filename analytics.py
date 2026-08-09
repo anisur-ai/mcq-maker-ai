@@ -13,11 +13,13 @@ def get_supabase():
         key = st.secrets["SUPABASE_KEY"]
 
         if not url or not key:
+            st.error("Supabase URL বা Key পাওয়া যাচ্ছে না।")
             return None
 
         return create_client(url, key)
 
-    except Exception:
+    except Exception as e:
+        st.error(f"Supabase Connection Error: {e}")
         return None
 
 
@@ -36,7 +38,6 @@ def log_usage(user_id, event_type="visit", question_count=0):
 
     try:
 
-        # Check whether this user already exists
         result = (
             supabase
             .table("usage_logs")
@@ -99,6 +100,5 @@ def log_usage(user_id, event_type="visit", question_count=0):
 
     except Exception as e:
 
-        print("Analytics Error:", e)
-
+        st.error(f"Analytics Error: {e}")
         return False
