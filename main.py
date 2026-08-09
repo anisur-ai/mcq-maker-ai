@@ -21,6 +21,7 @@ st.set_page_config(
     page_icon="🤖",
     layout="centered",
     initial_sidebar_state="collapsed",
+)
     # -------------------------------
 # Usage Analytics
 # -------------------------------
@@ -34,8 +35,7 @@ if "analytics_logged" not in st.session_state:
 
     log_usage(user_id, event_type="visit")
     st.session_state.analytics_logged = True
-)
-
+    
 # -------------------------------
 # Hide Sidebar & Clean UI
 # -------------------------------
