@@ -24,7 +24,7 @@ st.set_page_config(
 )
 import streamlit.components.v1 as components
 
-components.html('<meta name="google-site-verification" content="PxM5gLfj1z-ZxcGWAhyoNlGuuX64nPnDPrsajjPkab4" />', height=0)
+components.html('<script>var m=document.createElement("meta");m.name="google-site-verification";m.content="PxM5gLfj1z-ZxcGWAhyoNlGuuX64nPnDPrsajjPkab4";window.parent.document.head.appendChild(m);</script>', height=0)
 
 # -------------------------------
 # Usage Analytics
