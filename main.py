@@ -22,6 +22,10 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed",
 )
+import streamlit.components.v1 as components
+
+components.html('<meta name="google-site-verification" content="PxM5gLfj1z-ZxcGWAhyoNlGuuX64nPnDPrsajjPkab4" />', height=0)
+
 # -------------------------------
 # Usage Analytics
 # -------------------------------
