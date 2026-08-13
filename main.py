@@ -17,7 +17,7 @@ from helpers import (
 # -------------------------------
 
 st.set_page_config(
-    page_title="Anis AI",
+    page_title="Anis AI - Personal AI Assistant & Study Partner",
     page_icon="🤖",
     layout="centered",
     initial_sidebar_state="collapsed",
