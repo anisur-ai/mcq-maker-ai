@@ -146,84 +146,79 @@ if st.session_state.selected_file is not None:
         st.markdown(f"**Attached:** {getattr(sel, 'name', 'file')}")
 
 # -------------------------------
-# Note: Removed standalone top file uploader and moved attachment UI into input bar
+# Attachment Menu (OUTSIDE Form)
 # -------------------------------
 
+# "+" button OUTSIDE form - using regular st.button()
+top_cols = st.columns([0.08, 0.92])
+
+with top_cols[0]:
+    if st.button("+", key="plus_btn", help="Attach file", use_container_width=True):
+        st.session_state.show_attach_menu = not st.session_state.show_attach_menu
+        if not st.session_state.show_attach_menu:
+            st.session_state.attach_mode = None
+
+# Render attachment menu when toggled (OUTSIDE Form)
+if st.session_state.show_attach_menu:
+    st.divider()
+    menu_cols = st.columns(3)
+    
+    with menu_cols[0]:
+        if st.button("📷 Camera", key="attach_camera", use_container_width=True):
+            st.session_state.attach_mode = 'camera'
+            st.session_state.show_attach_menu = False
+            st.rerun()
+    
+    with menu_cols[1]:
+        if st.button("🖼️ Gallery", key="attach_gallery", use_container_width=True):
+            st.session_state.attach_mode = 'gallery'
+            st.session_state.show_attach_menu = False
+            st.rerun()
+    
+    with menu_cols[2]:
+        if st.button("📄 Document", key="attach_file", use_container_width=True):
+            st.session_state.attach_mode = 'file'
+            st.session_state.show_attach_menu = False
+            st.rerun()
+    
+    st.divider()
+
+# Render attachment input widgets based on attach_mode (OUTSIDE Form)
+if st.session_state.attach_mode == 'camera':
+    cam = st.camera_input("Capture an image")
+    if cam is not None:
+        st.session_state.selected_file = cam
+        st.session_state.attach_mode = None
+        st.rerun()
+
+elif st.session_state.attach_mode == 'gallery':
+    gallery_file = st.file_uploader("Select an image from gallery", type=["jpg","jpeg","png","webp"], key="gallery_uploader")
+    if gallery_file is not None:
+        st.session_state.selected_file = gallery_file
+        st.session_state.attach_mode = None
+        st.rerun()
+
+elif st.session_state.attach_mode == 'file':
+    doc_file = st.file_uploader("Select a document or file", type=None, key="doc_uploader")
+    if doc_file is not None:
+        st.session_state.selected_file = doc_file
+        st.session_state.attach_mode = None
+        st.rerun()
+
 # -------------------------------
-# Bottom Chat Input + Attachment Button
+# Bottom Chat Input + Send (FORM - no regular buttons inside)
 # -------------------------------
 
-# Using a form so send action is explicit and consistent
 with st.form(key="chat_form", clear_on_submit=False):
-    cols = st.columns([0.08, 0.78, 0.14])
+    cols = st.columns([0.78, 0.22])
 
-    # Column 0: Attachment + button
+    # Column 0: Message input
     with cols[0]:
-        # A visible + button that toggles the small menu
-        plus_clicked = st.button("+", key="plus_btn", help="Attach file", use_container_width=True)
-        
-        if plus_clicked:
-            # Toggle menu visibility
-            st.session_state.show_attach_menu = not st.session_state.show_attach_menu
-            # reset attach mode when closing
-            if not st.session_state.show_attach_menu:
-                st.session_state.attach_mode = None
+        user_text = st.text_input("", key="message_input", placeholder="Message Anis AI...")
 
-        # Render menu when toggled (outside form to avoid form-scoping issues)
-        if st.session_state.show_attach_menu:
-            st.divider()
-            col_cam, col_gal, col_doc = st.columns(3)
-            
-            with col_cam:
-                if st.button("📷 Camera", key="attach_camera", use_container_width=True):
-                    st.session_state.attach_mode = 'camera'
-                    st.session_state.show_attach_menu = False
-                    st.rerun()
-            
-            with col_gal:
-                if st.button("🖼️ Gallery", key="attach_gallery", use_container_width=True):
-                    st.session_state.attach_mode = 'gallery'
-                    st.session_state.show_attach_menu = False
-                    st.rerun()
-            
-            with col_doc:
-                if st.button("📄 Document", key="attach_file", use_container_width=True):
-                    st.session_state.attach_mode = 'file'
-                    st.session_state.show_attach_menu = False
-                    st.rerun()
-            
-            st.divider()
-
-    # Column 1: Message input
+    # Column 1: Send button
     with cols[1]:
-        user_text = st.text_input("", key="message_input", placeholder="Message Anis AI...", on_change=lambda: st.session_state.__setitem__('show_attach_menu', False))
-
-    # Column 2: Send button
-    with cols[2]:
-        submitted = st.form_submit_button("Send")
-
-    # Render attachment input widgets based on attach_mode (outside columns, still in form)
-    if st.session_state.attach_mode == 'camera':
-        cam = st.camera_input("Capture an image")
-        if cam is not None:
-            # camera_input returns an UploadedFile-like object
-            st.session_state.selected_file = cam
-            st.session_state.attach_mode = None
-            st.rerun()
-
-    elif st.session_state.attach_mode == 'gallery':
-        gallery_file = st.file_uploader("Select an image from gallery", type=["jpg","jpeg","png","webp"], key="gallery_uploader")
-        if gallery_file is not None:
-            st.session_state.selected_file = gallery_file
-            st.session_state.attach_mode = None
-            st.rerun()
-
-    elif st.session_state.attach_mode == 'file':
-        doc_file = st.file_uploader("Select a document or file", type=None, key="doc_uploader")
-        if doc_file is not None:
-            st.session_state.selected_file = doc_file
-            st.session_state.attach_mode = None
-            st.rerun()
+        submitted = st.form_submit_button("Send", use_container_width=True)
 
 # -------------------------------
 # Handle Send / Message Submission
