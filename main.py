@@ -376,7 +376,7 @@ if submitted and (user_text and user_text.strip()):
             "content": prompt,
         }
     )
- st.chat_message("user")
+ st.chat_message("user"):
         st.markdown(prompt)
 
     collected_sources = []
