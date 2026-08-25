@@ -62,31 +62,6 @@ footer{
  visibility:hidden;
  }
 
-/* Custom styling for attachment + button and popover */
-.plus-btn > button {
-  width: 44px !important;
-  height: 44px !important;
-  border-radius: 12px !important;
-  font-size: 22px !important;
-  padding: 0 !important;
-}
-
-.attach-popover {
-  background: var(--bg-color, #fff);
-  border: 1px solid rgba(0,0,0,0.08);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-  border-radius: 10px;
-  padding: 6px 8px;
-}
-
-.attach-option > button {
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border-radius: 8px;
-}
-
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -185,26 +160,39 @@ with st.form(key="chat_form", clear_on_submit=False):
     # Column 0: Attachment + button
     with cols[0]:
         # A visible + button that toggles the small menu
-        if st.button("+", key="plus_btn"):
+        plus_clicked = st.button("+", key="plus_btn", help="Attach file", use_container_width=True)
+        
+        if plus_clicked:
             # Toggle menu visibility
             st.session_state.show_attach_menu = not st.session_state.show_attach_menu
             # reset attach mode when closing
             if not st.session_state.show_attach_menu:
                 st.session_state.attach_mode = None
 
-        # Render popover/menu when toggled
+        # Render menu when toggled (outside form to avoid form-scoping issues)
         if st.session_state.show_attach_menu:
-            st.markdown("<div class='attach-popover'>", unsafe_allow_html=True)
-            if st.button("📷  Camera", key="attach_camera"):
-                st.session_state.attach_mode = 'camera'
-                st.session_state.show_attach_menu = False
-            if st.button("🖼️  Gallery", key="attach_gallery"):
-                st.session_state.attach_mode = 'gallery'
-                st.session_state.show_attach_menu = False
-            if st.button("📄  Document/File", key="attach_file"):
-                st.session_state.attach_mode = 'file'
-                st.session_state.show_attach_menu = False
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.divider()
+            col_cam, col_gal, col_doc = st.columns(3)
+            
+            with col_cam:
+                if st.button("📷 Camera", key="attach_camera", use_container_width=True):
+                    st.session_state.attach_mode = 'camera'
+                    st.session_state.show_attach_menu = False
+                    st.rerun()
+            
+            with col_gal:
+                if st.button("🖼️ Gallery", key="attach_gallery", use_container_width=True):
+                    st.session_state.attach_mode = 'gallery'
+                    st.session_state.show_attach_menu = False
+                    st.rerun()
+            
+            with col_doc:
+                if st.button("📄 Document", key="attach_file", use_container_width=True):
+                    st.session_state.attach_mode = 'file'
+                    st.session_state.show_attach_menu = False
+                    st.rerun()
+            
+            st.divider()
 
     # Column 1: Message input
     with cols[1]:
@@ -214,28 +202,28 @@ with st.form(key="chat_form", clear_on_submit=False):
     with cols[2]:
         submitted = st.form_submit_button("Send")
 
-    # Render attachment input widgets based on attach_mode
+    # Render attachment input widgets based on attach_mode (outside columns, still in form)
     if st.session_state.attach_mode == 'camera':
         cam = st.camera_input("Capture an image")
         if cam is not None:
             # camera_input returns an UploadedFile-like object
             st.session_state.selected_file = cam
             st.session_state.attach_mode = None
-            st.experimental_rerun()
+            st.rerun()
 
     elif st.session_state.attach_mode == 'gallery':
         gallery_file = st.file_uploader("Select an image from gallery", type=["jpg","jpeg","png","webp"], key="gallery_uploader")
         if gallery_file is not None:
             st.session_state.selected_file = gallery_file
             st.session_state.attach_mode = None
-            st.experimental_rerun()
+            st.rerun()
 
     elif st.session_state.attach_mode == 'file':
         doc_file = st.file_uploader("Select a document or file", type=None, key="doc_uploader")
         if doc_file is not None:
             st.session_state.selected_file = doc_file
             st.session_state.attach_mode = None
-            st.experimental_rerun()
+            st.rerun()
 
 # -------------------------------
 # Handle Send / Message Submission
