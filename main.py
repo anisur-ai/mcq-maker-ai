@@ -268,114 +268,99 @@ elif st.session_state.attach_mode == 'file':
         st.rerun()
 
 # -------------------------------
-# Gemini-Style Bottom Input Bar (Fixed Position)
 # ==========================================
-# Gemini-Style Bottom Input Bar & CSS
+# Clean Gemini Input Layout (Without Form Bug)
 # ==========================================
+
+# CSS for Alignment and Design
 st.markdown("""
 <style>
-/* Streamlit-এর কলামগুলোকে মোবাইলেও এক সারিতে পাশাপাশি রাখার ফিক্স */
-[data-testid="column"] {
-    width: calc(33.3333% - 1rem) !important;
-    flex: 1 1 calc(33.3333% - 1rem) !important;
-    min-width: calc(33.3333% - 1rem) !important;
-}
-
-/* বটম ইনপুট কন্টেইনার স্টাইলিং */
-div[data-testid="stForm"] {
-    border: 1px solid #30363d !important;
+/* ইনপুট বক্সের মেইন কার্ড */
+div[data-testid="stVerticalBlock"] > div:has(div[data-testid="stTextArea"]) {
     background-color: #1e1f23 !important;
+    border: 1px solid #30363d !important;
     border-radius: 20px !important;
-    padding: 10px 14px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+    padding: 10px !important;
 }
 
-/* ইনপুট ফিল্ডের বর্ডার ও ব্যাকগ্রাউন্ড ক্লিন করা */
+/* টেক্সট এরিয়া ব্যাকগ্রাউন্ড ক্লিন করা */
 div[data-testid="stTextArea"] textarea {
     background-color: transparent !important;
     border: none !important;
     color: #ffffff !important;
-    font-size: 15px !important;
     box-shadow: none !important;
 }
 
-div[data-testid="stTextArea"] textarea:focus {
-    border: none !important;
-    box-shadow: none !important;
+/* বাটনগুলোকে মোবাইলেও এক লাইনে পাশাপাশি রাখার ফোর্স স্টাইল */
+div[data-testid="column"] {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
-/* প্লাস এবং সেন্ড বাটন গোল করা */
-div[data-testid="stForm"] button {
+/* গোল বাটন স্টাইল */
+div[data-testid="column"] button {
     border-radius: 50% !important;
-    width: 38px !important;
-    height: 38px !important;
-    padding: 0 !important;
+    width: 42px !important;
+    height: 42px !important;
     background-color: #2b2d31 !important;
     color: #ffffff !important;
     border: none !important;
 }
 
-/* অ্যাটাচমেন্ট পপ-আপ মেনু বাটন স্টাইল */
-.attach-box button {
-    width: 100% !important;
-    background-color: #2b2d31 !important;
-    color: #ffffff !important;
-    border: 1px solid #3e4046 !important;
+/* অ্যাটাচমেন্ট পপ-আপ মেনু */
+.attach-menu-box button {
     border-radius: 10px !important;
-    padding: 6px 2px !important;
-    font-size: 12px !important;
+    width: 100% !important;
+    height: auto !important;
+    font-size: 13px !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Attachment Popover Menu (ইনপুট বক্সের ঠিক উপরে দেখাবে) ---
+# --- Attachment Popover Menu ---
 if st.session_state.get("show_attach_menu", False):
-    st.markdown("<div class='attach-box'>", unsafe_allow_html=True)
-    m_col1, m_col2, m_col3 = st.columns(3)
-
-    with m_col1:
+    st.markdown("<div class='attach-menu-box'>", unsafe_allow_html=True)
+    m1, m2, m3 = st.columns(3)
+    with m1:
         if st.button("📷 Camera", key="btn_cam"):
             st.session_state.attach_mode = 'camera'
             st.session_state.show_attach_menu = False
             st.rerun()
-
-    with m_col2:
+    with m2:
         if st.button("🖼️ Gallery", key="btn_gal"):
             st.session_state.attach_mode = 'gallery'
             st.session_state.show_attach_menu = False
             st.rerun()
-
-    with m_col3:
+    with m3:
         if st.button("📁 File", key="btn_file"):
             st.session_state.attach_mode = 'file'
             st.session_state.show_attach_menu = False
             st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Main Input Form ---
-with st.form(key="chat_form", clear_on_submit=True):
-    user_text = st.text_area(
-        "Ask Anis AI...",
-        key="message_input",
-        height=60,
-        placeholder="Ask Anis AI...",
-        label_visibility="collapsed"
-    )
-    
-    btn_col1, btn_col2, btn_col3 = st.columns([1, 6, 1])
-    
-    with btn_col1:
-        plus_clicked = st.form_submit_button("➕")
-        
-    with btn_col2:
-        pass
-        
-    with btn_col3:
-        submitted = st.form_submit_button("➔")
+# --- Bottom Input Area ---
+user_text = st.text_area(
+    "Ask Anis AI...",
+    key="message_input",
+    height=60,
+    placeholder="Ask Anis AI...",
+    label_visibility="collapsed"
+)
 
-if plus_clicked:
-    st.session_state.show_attach_menu = not st.session_state.get("show_attach_menu", False)
-    st.rerun()
+# বাটন লেআউট (বাম দিকে +, ডান দিকে ➔)
+col_left, col_mid, col_right = st.columns([1, 5, 1])
+
+with col_left:
+    if st.button("➕", key="plus_btn_nav"):
+        st.session_state.show_attach_menu = not st.session_state.get("show_attach_menu", False)
+        st.rerun()
+        
+with col_mid:
+    pass
+
+with col_right:
+    submitted = st.button("➔",key="send_btn_nav")
 
 # -------------------------------
 # Handle Send / Message Submission
@@ -391,8 +376,7 @@ if submitted and (user_text and user_text.strip()):
             "content": prompt,
         }
     )
-
-    with st.chat_message("user"):
+h st.chat_message("user"):
         st.markdown(prompt)
 
     collected_sources = []
