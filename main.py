@@ -74,6 +74,7 @@ keys_dict = {
     "gemini": st.secrets.get("GEMINI_API_KEY"),
     "mistral": st.secrets.get("MISTRAL_API_KEY"),
     "openrouter": st.secrets.get("OPENROUTER_API_KEY"),
+    "serper": st.secrets.get("SERPER_API_KEY"),
     "tavily": st.secrets.get("TAVILY_API_KEY"),
     "firecrawl": st.secrets.get("FIRECRAWL_API_KEY"),
     "jina": st.secrets.get("JINA_API_KEY"),
@@ -217,6 +218,7 @@ if prompt := st.chat_input("Message Anis AI..."):
 
             search_text, collected_sources = smart_search(
                 prompt,
+                keys_dict.get("serper"),
                 keys_dict.get("tavily"),
                 keys_dict.get("jina")
             )
@@ -377,4 +379,4 @@ if prompt := st.chat_input("Message Anis AI..."):
         "role": "assistant",
         "content": error_message,
     }
-            )            
+            )

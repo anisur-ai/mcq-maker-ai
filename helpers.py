@@ -23,6 +23,8 @@ MISTRAL_MODEL = "mistral-small-latest"
 OPENROUTER_DEFAULT_MODEL = "mistralai/mistral-small-3.2-24b-instruct:free"
 OPENROUTER_CODE_MODEL = "deepseek/deepseek-chat"
 
+SERPER_API_URL = "https://google.serper.dev/search"
+
 
 # =====================================================
 # COMMON UTILITIES
@@ -228,7 +230,85 @@ def smart_read_file(uploaded_file, ocr_api_key):
         print("File Reader Error:", e)
 
     return truncate_text(extracted)
-    # =====================================================
+
+
+# =====================================================
+# SERPER API SEARCH (PRIMARY)
+# =====================================================
+
+def serper_search(query, serper_api_key):
+    """
+    Search using Serper API (Google Search).
+    Returns: (formatted_text, urls_list)
+    """
+
+    if not serper_api_key:
+        return "", []
+
+    try:
+
+        headers = {
+            "X-API-KEY": serper_api_key,
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "q": query,
+            "num": 5
+        }
+
+        response = requests.post(
+            SERPER_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
+
+        if response.status_code == 200:
+
+            data = response.json()
+
+            results = data.get("organic", [])
+
+            if results:
+
+                text = ""
+                urls = []
+
+                for result in results:
+
+                    title = result.get("title", "")
+                    url = result.get("link", "")
+                    snippet = result.get("snippet", "")
+
+                    if url:
+                        urls.append(url)
+
+                    text += (
+                        f"**{title}**\n"
+                        f"URL: {url}\n"
+                        f"{snippet}\n\n"
+                    )
+
+                return truncate_text(text, MAX_WEB_CONTEXT), urls
+
+        else:
+
+            error_msg = f"Serper API Error: {response.status_code}"
+            print(error_msg)
+
+    except requests.Timeout:
+
+        print("Serper Search Timeout")
+
+    except Exception as e:
+
+        print("Serper Search Error:", e)
+
+    return "", []
+
+
+# =====================================================
 # AI INTENT DETECTOR
 # =====================================================
 
@@ -288,10 +368,34 @@ def needs_web_search(prompt, groq_api_key):
 
 
 # =====================================================
-# TAVILY SEARCH
+# SMART SEARCH WITH SERPER PRIORITY + FALLBACKS
 # =====================================================
 
-def smart_search(query, tavily_key, jina_key=None):
+def smart_search(query, serper_key, tavily_key, jina_key=None):
+    """
+    Smart search with priority order:
+    1. Serper API (Google Search) - PRIMARY
+    2. Tavily Search - FALLBACK 1
+    3. Jina Search - FALLBACK 2
+    
+    Returns: (formatted_text, urls_list)
+    """
+
+    # --------------------------
+    # Priority 1: Serper API
+    # --------------------------
+
+    if serper_key:
+
+        search_text, urls = serper_search(query, serper_key)
+
+        if search_text and urls:
+            return search_text, urls
+
+
+    # --------------------------
+    # Priority 2: Tavily Search
+    # --------------------------
 
     if tavily_key:
 
@@ -340,9 +444,9 @@ def smart_search(query, tavily_key, jina_key=None):
             print("Tavily Error:", e)
 
 
-    # -----------------------------
-    # Jina Search Fallback
-    # -----------------------------
+    # --------------------------
+    # Priority 3: Jina Search Fallback
+    # --------------------------
 
     try:
 
@@ -481,7 +585,9 @@ def smart_scrape(url, firecrawl_key, jina_key):
         print("Jina Reader Error:", e)
 
     return "", []
-    # =====================================================
+
+
+# =====================================================
 # DYNAMIC MODEL ROUTER
 # =====================================================
 
@@ -578,8 +684,10 @@ def manage_conversation_memory(
 
     if len(messages) < 18:
 
-        return previous_summary,
-        # =====================================================
+        return previous_summary
+
+
+# =====================================================
 # BUILD FINAL AI MESSAGES
 # =====================================================
 
@@ -677,72 +785,14 @@ def safe_context(
         return ""
 
     if len(text) <= limit:
-        return# --- 4. URL Scraper (Firecrawl -> Jina Reader) ---
-def smart_scrape(url_to_scrape, firecrawl_key, jina_key):
-    # Firecrawl
-    if firecrawl_key:
-        try:
-            url = "https://api.firecrawl.dev/v1/scrape"
-            headers = {
-                "Authorization": f"Bearer {firecrawl_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "url": url_to_scrape,
-                "formats": ["markdown"]
-            }
+        return text
 
-            res = requests.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=12
-            )
+    return text[:limit]
 
-            if (
-                res.status_code == 200
-                and res.json().get("success")
-            ):
-                content = (
-                    res.json()
-                    .get("data", {})
-                    .get("markdown", "")
-                )
-                return truncate_text(content, 10000), [url_to_scrape]
 
-        except Exception:
-            pass
-
-    # Jina Reader Fallback
-    try:
-        jina_url = f"https://r.jina.ai/{url_to_scrape}"
-
-        headers = {
-            "Accept": "application/json"
-        }
-
-        if jina_key:
-            headers["Authorization"] = f"Bearer {jina_key}"
-
-        res = requests.get(
-            jina_url,
-            headers=headers,
-            timeout=12
-        )
-
-        if res.status_code == 200:
-            content = (
-                res.json()
-                .get("data", {})
-                .get("content", "")
-            )
-
-            return truncate_text(content, 10000), [url_to_scrape]
-
-    except Exception:
-        pass
-
-    return "Could not extract content from URL.", []# ---------- Part 5 : Provider Aware AI Fallback ----------
+# =====================================================
+# PROVIDER AWARE AI FALLBACK
+# =====================================================
 
 def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096):
     default_temp = 0.5
@@ -908,5 +958,3 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
                 pass
 
     yield "ERROR_ALL_FAILED"
-
-        
