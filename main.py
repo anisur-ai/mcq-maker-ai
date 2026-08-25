@@ -19,7 +19,7 @@ from helpers import (
 st.set_page_config(
     page_title="Anis AI - Personal AI Assistant & Study Partner",
     page_icon="🤖",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed",
 )
 
@@ -36,31 +36,128 @@ if "analytics_logged" not in st.session_state:
 
     log_usage(user_id, event_type="visit")
     st.session_state.analytics_logged = True
-    
+
 # -------------------------------
-# Hide Sidebar & Clean UI
+# Styling - Gemini-like Input Bar
 # -------------------------------
 
 st.markdown("""
 <style>
 
 [data-testid="collapsedControl"]{
- display:none;
- }
+    display: none;
+}
 
 .stChatMessage{
- background:transparent !important;
- }
+    background: transparent !important;
+}
 
 .block-container{
- padding-top:2rem;
- padding-bottom:2rem;
- max-width:850px;
- }
+    padding-top: 2rem;
+    padding-bottom: 6rem;
+    max-width: 900px;
+    margin: 0 auto;
+}
 
 footer{
- visibility:hidden;
- }
+    visibility: hidden;
+}
+
+/* Gemini-style input card at bottom */
+.input-card {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 900px;
+    background: #1e1e1e;
+    border: 1px solid #3f3f3f;
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    z-index: 999;
+}
+
+.input-card textarea {
+    background: transparent !important;
+    border: none !important;
+    color: #fff !important;
+    font-size: 15px !important;
+    resize: none !important;
+    outline: none !important;
+}
+
+.input-card textarea::placeholder {
+    color: #999 !important;
+}
+
+.input-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.plus-btn-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.plus-btn-container button {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    font-size: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.action-buttons button {
+    min-width: 0 !important;
+    height: 40px !important;
+    padding: 0 12px !important;
+    border-radius: 20px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+}
+
+/* Attachment menu styling */
+.attach-menu {
+    background: #2a2a2a;
+    border: 1px solid #3f3f3f;
+    border-radius: 12px;
+    padding: 8px;
+    margin-top: 8px;
+}
+
+.attach-menu button {
+    width: 100% !important;
+    text-align: left !important;
+    padding: 10px 12px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    border: none !important;
+    background: transparent !important;
+    color: #fff !important;
+    cursor: pointer !important;
+}
+
+.attach-menu button:hover {
+    background: #3f3f3f !important;
+}
 
 </style>
 """, unsafe_allow_html=True)
@@ -88,7 +185,7 @@ ocr_api_key = st.secrets.get("OCR_API_KEY")
 
 st.markdown(
 """
-<h1 style="text-align:center;">
+<h1 style="text-align:center; margin-bottom: 2rem;">
 Anis AI
 </h1>
 """,
@@ -97,7 +194,7 @@ unsafe_allow_html=True,
 
 st.markdown(
 """
-<p style="text-align:center;color:gray;">
+<p style="text-align:center; color:#888; margin-bottom: 3rem;">
 How can I help you today?
 </p>
 """,
@@ -114,12 +211,10 @@ if "messages" not in st.session_state:
 if "chat_summary" not in st.session_state:
     st.session_state.chat_summary = ""
 
-# Attachment UI state
 if "show_attach_menu" not in st.session_state:
     st.session_state.show_attach_menu = False
 
 if "attach_mode" not in st.session_state:
-    # values: None, 'camera', 'gallery', 'file'
     st.session_state.attach_mode = None
 
 if "selected_file" not in st.session_state:
@@ -137,7 +232,6 @@ for message in st.session_state.messages:
 if st.session_state.selected_file is not None:
     sel = st.session_state.selected_file
     try:
-        # If it's an image-like object, try to show a preview
         if hasattr(sel, 'type') and sel.type.startswith('image'):
             st.image(sel.getvalue() if hasattr(sel, 'getvalue') else sel.read())
         else:
@@ -145,45 +239,13 @@ if st.session_state.selected_file is not None:
     except Exception:
         st.markdown(f"**Attached:** {getattr(sel, 'name', 'file')}")
 
+# Add spacing for sticky bottom input
+st.markdown("<div style='height: 150px;'></div>", unsafe_allow_html=True)
+
 # -------------------------------
-# Attachment Menu (OUTSIDE Form)
+# Attachment Input Widgets (BEFORE Chat Input Form)
 # -------------------------------
 
-# "+" button OUTSIDE form - using regular st.button()
-top_cols = st.columns([0.08, 0.92])
-
-with top_cols[0]:
-    if st.button("+", key="plus_btn", help="Attach file", use_container_width=True):
-        st.session_state.show_attach_menu = not st.session_state.show_attach_menu
-        if not st.session_state.show_attach_menu:
-            st.session_state.attach_mode = None
-
-# Render attachment menu when toggled (OUTSIDE Form)
-if st.session_state.show_attach_menu:
-    st.divider()
-    menu_cols = st.columns(3)
-    
-    with menu_cols[0]:
-        if st.button("📷 Camera", key="attach_camera", use_container_width=True):
-            st.session_state.attach_mode = 'camera'
-            st.session_state.show_attach_menu = False
-            st.rerun()
-    
-    with menu_cols[1]:
-        if st.button("🖼️ Gallery", key="attach_gallery", use_container_width=True):
-            st.session_state.attach_mode = 'gallery'
-            st.session_state.show_attach_menu = False
-            st.rerun()
-    
-    with menu_cols[2]:
-        if st.button("📄 Document", key="attach_file", use_container_width=True):
-            st.session_state.attach_mode = 'file'
-            st.session_state.show_attach_menu = False
-            st.rerun()
-    
-    st.divider()
-
-# Render attachment input widgets based on attach_mode (OUTSIDE Form)
 if st.session_state.attach_mode == 'camera':
     cam = st.camera_input("Capture an image")
     if cam is not None:
@@ -206,19 +268,62 @@ elif st.session_state.attach_mode == 'file':
         st.rerun()
 
 # -------------------------------
-# Bottom Chat Input + Send (FORM - no regular buttons inside)
+# Gemini-Style Bottom Input Bar (Fixed Position)
 # -------------------------------
 
-with st.form(key="chat_form", clear_on_submit=False):
-    cols = st.columns([0.78, 0.22])
-
-    # Column 0: Message input
-    with cols[0]:
-        user_text = st.text_input("", key="message_input", placeholder="Message Anis AI...")
-
-    # Column 1: Send button
-    with cols[1]:
+with st.form(key="chat_form", clear_on_submit=True):
+    # Top Row: Multiline Text Input
+    user_text = st.text_area(
+        "Ask Anis AI...",
+        key="message_input",
+        height=60,
+        placeholder="Ask Anis AI...",
+        label_visibility="collapsed"
+    )
+    
+    # Bottom Row: Plus Button + Action Buttons
+    bottom_cols = st.columns([0.08, 0.84, 0.08])
+    
+    # Left: Plus Button for Attachments
+    with bottom_cols[0]:
+        if st.button("+", key="plus_btn", help="Attach file"):
+            st.session_state.show_attach_menu = not st.session_state.show_attach_menu
+            if not st.session_state.show_attach_menu:
+                st.session_state.attach_mode = None
+    
+    # Middle: Empty space
+    with bottom_cols[1]:
+        pass
+    
+    # Right: Send Button
+    with bottom_cols[2]:
         submitted = st.form_submit_button("Send", use_container_width=True)
+    
+    # Attachment Menu (shown when + is clicked)
+    if st.session_state.show_attach_menu:
+        st.markdown("<div class='attach-menu'>", unsafe_allow_html=True)
+        
+        menu_cols = st.columns(3)
+        
+        with menu_cols[0]:
+            if st.button("📷 Camera", key="attach_camera", use_container_width=True):
+                st.session_state.attach_mode = 'camera'
+                st.session_state.show_attach_menu = False
+                st.rerun()
+        
+        with menu_cols[1]:
+            if st.button("🖼️ Gallery", key="attach_gallery", use_container_width=True):
+                st.session_state.attach_mode = 'gallery'
+                st.session_state.show_attach_menu = False
+                st.rerun()
+        
+        with menu_cols[2]:
+            if st.button("📄 Document", key="attach_file", use_container_width=True):
+                st.session_state.attach_mode = 'file'
+                st.session_state.show_attach_menu = False
+                st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------------------
 # Handle Send / Message Submission
@@ -239,17 +344,11 @@ if submitted and (user_text and user_text.strip()):
         st.markdown(prompt)
 
     collected_sources = []
-
     file_context = ""
-
     external_context = ""
 
-    # -------------------------------
     # Read Attached File (if any)
-    # -------------------------------
-
     if st.session_state.selected_file is not None:
-
         try:
             file_context = smart_read_file(
                 st.session_state.selected_file,
@@ -264,24 +363,16 @@ if submitted and (user_text and user_text.strip()):
         except Exception as e:
             print("File read error:", e)
 
-        # clear selected file after attaching it to the prompt
         st.session_state.selected_file = None
 
-    # -------------------------------
     # URL Detection
-    # -------------------------------
-
     url_match = re.search(
         r"https?://[^\s]+",
         prompt
     )
 
-    # -------------------------------
     # External Context
-    # -------------------------------
-
     if url_match:
-
         target_url = url_match.group(0)
 
         scraped_text, collected_sources = smart_scrape(
@@ -296,14 +387,12 @@ if submitted and (user_text and user_text.strip()):
         )
 
     else:
-
         should_search = needs_web_search(
             prompt,
             keys_dict.get("groq")
         )
 
         if should_search:
-
             search_text, collected_sources = smart_search(
                 prompt,
                 keys_dict.get("serper"),
@@ -312,30 +401,19 @@ if submitted and (user_text and user_text.strip()):
             )
 
             if search_text:
-
                 external_context = f"\n\n--- LIVE WEB SEARCH RESULTS ---\n{search_text}"
-            
-            
-    # -------------------------------
-    # Model Router
-    # -------------------------------
 
+    # Model Router
     router_info = select_model_by_task(
         prompt,
         file_context + external_context
     )
 
-        # -------------------------------
     # Conversation Memory
-    # -------------------------------
-
     managed_messages = st.session_state.messages
     st.session_state.chat_summary = ""
 
-    #     # -------------------------------
     # System Prompt
-    # -------------------------------
-
     system_prompt = (
         "You are Anis AI, a professional autonomous AI assistant.\n\n"
         "Rules:\n"
@@ -352,7 +430,6 @@ if submitted and (user_text and user_text.strip()):
         "- If no external information was used, do not add Sources.\n"
     )
 
-    ai_messages = []
     ai_messages = [
         {
             "role": "system",
@@ -374,22 +451,16 @@ if submitted and (user_text and user_text.strip()):
             "role": "user",
             "content": final_prompt,
         }
-        )
+    )
 
-    # -------------------------------
     # Assistant Response
-    # -------------------------------
-
     with st.chat_message("assistant"):
 
         response_placeholder = st.empty()
-
         full_response = ""
-
         has_error = False
 
         try:
-
             stream = provider_aware_ai_fallback(
                 keys_dict,
                 router_info,
@@ -397,7 +468,6 @@ if submitted and (user_text and user_text.strip()):
             )
 
             for chunk in stream:
-
                 if (
                     chunk == "ERROR_ALL_FAILED"
                     or chunk.startswith("দুঃখিত")
@@ -406,22 +476,17 @@ if submitted and (user_text and user_text.strip()):
                     break
 
                 full_response += chunk
-
                 response_placeholder.markdown(
                     full_response + "▌"
                 )
 
             if has_error or not full_response:
-
                 error_message = (
                     "দুঃখিত কিছুক্ষণ অপেক্ষা করুন "
                     "টেকনিক্যাল সমস্যা হয়েছে ঠিক করা হচ্ছে"
                 )
 
-                response_placeholder.markdown(
-                    error_message
-                )
-
+                response_placeholder.markdown(error_message)
                 st.session_state.messages.append(
                     {
                         "role": "assistant",
@@ -430,20 +495,12 @@ if submitted and (user_text and user_text.strip()):
                 )
 
             else:
-
                 if collected_sources:
-
                     full_response += "\n\n**Sources**\n"
-
-                    for source in sorted(
-                        set(collected_sources)
-                    ):
+                    for source in sorted(set(collected_sources)):
                         full_response += f"- {source}\n"
 
-                response_placeholder.markdown(
-                    full_response
-                )
-
+                response_placeholder.markdown(full_response)
                 st.session_state.messages.append(
                     {
                         "role": "assistant",
@@ -452,19 +509,15 @@ if submitted and (user_text and user_text.strip()):
                 )
 
         except Exception:
-
             error_message = (
                 "দুঃখিত কিছুক্ষণ অপেক্ষা করুন "
                 "টেকনিক্যাল সমস্যা হয়েছে ঠিক করা হচ্ছে"
             )
 
-            response_placeholder.markdown(
-                error_message
-            )
-
+            response_placeholder.markdown(error_message)
             st.session_state.messages.append(
-    {
-        "role": "assistant",
-        "content": error_message,
-    }
+                {
+                    "role": "assistant",
+                    "content": error_message,
+                }
             )
