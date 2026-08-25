@@ -269,59 +269,60 @@ elif st.session_state.attach_mode == 'file':
 
 # -------------------------------
 # Gemini-Style Bottom Input Bar (Fixed Position)
-# -------------------------------
+# --- Bottom Input Area (Without Form wrapper) ---
+st.markdown("<div class='chat-input-container'>", unsafe_allow_html=True)
 
-with st.form(key="chat_form", clear_on_submit=True):
-    # Top Row: Multiline Text Input
-    user_text = st.text_area(
-        "Ask Anis AI...",
-        key="message_input",
-        height=60,
-        placeholder="Ask Anis AI...",
-        label_visibility="collapsed"
-    )
+# Top Row: Text Area
+user_text = st.text_area(
+    "Ask Anis AI...",
+    key="message_input",
+    height=60,
+    placeholder="Ask Anis AI...",
+    label_visibility="collapsed"
+)
+
+# Bottom Row: Buttons
+bottom_cols = st.columns([0.08, 0.84, 0.08])
+
+# Left: Plus Button
+with bottom_cols[0]:
+    if st.button("+", key="plus_btn", help="Attach file"):
+        if "show_attach_menu" not in st.session_state:
+            st.session_state.show_attach_menu = False
+        st.session_state.show_attach_menu = not st.session_state.show_attach_menu
+
+# Middle: Space
+with bottom_cols[1]:
+    pass
+
+# Right: Send Button
+with bottom_cols[2]:
+    submitted = st.button("Send", key="send_btn")
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# --- Attachment Menu Popup ---
+if st.session_state.get("show_attach_menu", False):
+    st.markdown("<div class='attach-menu'>", unsafe_allow_html=True)
+    menu_cols = st.columns(3)
     
-    # Bottom Row: Plus Button + Action Buttons
-    bottom_cols = st.columns([0.08, 0.84, 0.08])
-    
-    # Left: Plus Button for Attachments
-    with bottom_cols[0]:
-        if st.button("+", key="plus_btn", help="Attach file"):
-            st.session_state.show_attach_menu = not st.session_state.show_attach_menu
-            if not st.session_state.show_attach_menu:
-                st.session_state.attach_mode = None
-    
-    # Middle: Empty space
-    with bottom_cols[1]:
-        pass
-    
-    # Right: Send Button
-    with bottom_cols[2]:
-        submitted = st.form_submit_button("Send", use_container_width=True)
-    
-    # Attachment Menu (shown when + is clicked)
-    if st.session_state.show_attach_menu:
-        st.markdown("<div class='attach-menu'>", unsafe_allow_html=True)
-        
-        menu_cols = st.columns(3)
-        
-        with menu_cols[0]:
-            if st.button("📷 Camera", key="attach_camera", use_container_width=True):
-                st.session_state.attach_mode = 'camera'
-                st.session_state.show_attach_menu = False
-                st.rerun()
-        
-        with menu_cols[1]:
-            if st.button("🖼️ Gallery", key="attach_gallery", use_container_width=True):
-                st.session_state.attach_mode = 'gallery'
-                st.session_state.show_attach_menu = False
-                st.rerun()
-        
-        with menu_cols[2]:
-            if st.button("📄 Document", key="attach_file", use_container_width=True):
-                st.session_state.attach_mode = 'file'
-                st.session_state.show_attach_menu = False
-                st.rerun()
+    with menu_cols[0]:
+        if st.button("📷 Camera", key="attach_camera"):
+            st.session_state.attach_mode = 'camera'
+            st.session_state.show_attach_menu = False
+            st.rerun()
+            
+    with menu_cols[1]:
+        if st.button("🖼️ Gallery", key="attach_gallery"):
+            st.session_state.attach_mode = 'gallery'
+            st.session_state.show_attach_menu = False
+            st.rerun()
+            
+    with menu_cols[2]:
+        if st.button("📁 File", key="attach_file"):
+            st.session_state.attach_mode = 'file'
+            st.session_state.show_attach_menu = False
+            st.rerun()
         
         st.markdown("</div>", unsafe_allow_html=True)
 
