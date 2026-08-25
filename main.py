@@ -366,18 +366,18 @@ with col_right:
 # Handle Send / Message Submission
 # -------------------------------
 
-if submitted and (user_text and user_text.strip()):
+    if submitted and (user_text and user_text.strip()):
 
-    prompt = user_text.strip()
+        prompt = user_text.strip()
 
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt,
-        }
-    )
- with st.chat_message("user"):
-     st.markdown(prompt)
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
     collected_sources = []
     file_context = ""
