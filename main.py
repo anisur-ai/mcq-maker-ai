@@ -743,21 +743,18 @@ if submitted and user_text and user_text.strip():
     # -----------------------------------------------------
     url_match = re.search(r"https?://[^\s]+", prompt)
 
-    if url_match:
+        if url_match:
         target_url = url_match.group(0)
-
         scraped_text, collected_sources = smart_scrape(
             target_url,
             keys_dict.get("firecrawl"),
             keys_dict.get("jina"),
         )
-
         external_context = (
             "\n\n--- URL CONTENT ---\n"
             + scraped_text
         )
-        
-        else:
+    else:
         should_search = needs_web_search(
             prompt,
             keys_dict.get("groq"),
@@ -775,7 +772,7 @@ if submitted and user_text and user_text.strip():
                 external_context = (
                     "\n\n--- LIVE WEB SEARCH RESULTS ---\n"
                     + search_text
-)
+    )
                 
     # -----------------------------------------------------
     # Model router
