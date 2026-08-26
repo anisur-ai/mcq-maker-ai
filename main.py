@@ -741,9 +741,11 @@ if submitted and user_text and user_text.strip():
     # -----------------------------------------------------
     # URL detection
     # -----------------------------------------------------
-    url_match = re.search(r"https?://[^\s]+", prompt)
+        external_context = ""
+    scraped_text = ""
+    search_text = ""
 
-        if url_match:
+    if url_match:
         target_url = url_match.group(0)
         scraped_text, collected_sources = smart_scrape(
             target_url,
@@ -773,7 +775,7 @@ if submitted and user_text and user_text.strip():
                     "\n\n--- LIVE WEB SEARCH RESULTS ---\n"
                     + search_text
     )
-                
+    
     # -----------------------------------------------------
     # Model router
     # -----------------------------------------------------
