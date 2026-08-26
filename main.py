@@ -19,7 +19,7 @@ from helpers import (
 # =========================================================
 
 st.set_page_config(
-    page_title="Anis AI - Premium Business Suite",
+    page_title="Anis AI",
     page_icon="✨",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -50,7 +50,6 @@ defaults = {
     "selected_file": None,
     "history": [],
     "credits": 100,
-    "message_input": "",
     "show_history": False,
 }
 
@@ -76,18 +75,16 @@ keys_dict = {
 ocr_api_key = st.secrets.get("OCR_API_KEY")
 
 # =========================================================
-# ULTRA-PREMIUM 3D GLASS UI STYLES
+# ULTRA-PREMIUM GLASS UI STYLES
 # =========================================================
 
 st.markdown(
     """
 <style>
-/* ---------- Global & No-Scroll Layout ---------- */
+/* ---------- Global Layout ---------- */
 html, body, [data-testid="stAppViewContainer"] {
     background: #08090d !important;
     color: #f4f4f5 !important;
-    overflow: hidden !important;
-    height: 100vh !important;
 }
 
 [data-testid="stHeader"] {
@@ -99,13 +96,10 @@ footer, [data-testid="collapsedControl"] {
 }
 
 .block-container {
-    max-width: 1000px !important;
-    height: 100vh !important;
-    padding-top: 1rem !important;
-    padding-bottom: 90px !important;
+    max-width: 900px !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 120px !important;
     margin: auto;
-    display: flex;
-    flex-direction: column;
 }
 
 /* ---------- 3D Floating Sphere Atmosphere ---------- */
@@ -113,12 +107,12 @@ footer, [data-testid="collapsedControl"] {
 [data-testid="stAppViewContainer"]::after {
     content: "";
     position: fixed;
-    width: 300px;
-    height: 300px;
+    width: 250px;
+    height: 250px;
     border-radius: 50%;
     pointer-events: none;
-    filter: blur(90px);
-    opacity: 0.18;
+    filter: blur(80px);
+    opacity: 0.15;
     z-index: 0;
     animation: anisFloat3D 12s ease-in-out infinite alternate;
 }
@@ -137,9 +131,8 @@ footer, [data-testid="collapsedControl"] {
 }
 
 @keyframes anisFloat3D {
-    0% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
-    50% { transform: translate3d(40px, -30px, 50px) scale(1.15) rotate(180deg); }
-    100% { transform: translate3d(-20px, 20px, -30px) scale(0.95) rotate(360deg); }
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(30px, -20px, 0) scale(1.1); }
 }
 
 /* ---------- Top bar ---------- */
@@ -147,112 +140,87 @@ footer, [data-testid="collapsedControl"] {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 16px;
+    padding: 8px 14px;
     background: rgba(18, 20, 26, 0.65);
     backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    margin-bottom: 12px;
+    border-radius: 14px;
+    margin-bottom: 10px;
 }
 
 .anis-brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .anis-logo {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, #6366f1, #a855f7);
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
-    font-size: 18px;
+    font-size: 16px;
 }
 
 .anis-name {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: -0.3px;
     color: #ffffff;
-}
-
-.anis-sub {
-    font-size: 10px;
-    color: #94a3b8;
 }
 
 .top-credit {
     color: #e2e8f0;
     font-size: 12px;
-    padding: 5px 12px;
+    padding: 4px 10px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 999px;
     background: rgba(30, 32, 42, 0.7);
 }
 
-/* ---------- Welcome Container ---------- */
+/* ---------- Welcome Screen ---------- */
 .welcome-wrap {
     text-align: center;
-    padding: 40px 15px;
-    margin: auto 0;
+    padding: 30px 10px 15px;
 }
 
 .welcome-orb {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 16px;
-    border-radius: 20px;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
+    font-size: 26px;
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25));
     border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
-    animation: welcomeFloat 4s ease-in-out infinite;
-}
-
-@keyframes welcomeFloat {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
 }
 
 .welcome-title {
-    font-size: clamp(24px, 4vw, 36px);
+    font-size: clamp(22px, 4vw, 32px);
     font-weight: 800;
-    letter-spacing: -1px;
     margin: 0;
-    background: linear-gradient(to right, #ffffff, #cbd5e1);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #ffffff;
 }
 
 .welcome-text {
-    max-width: 550px;
-    margin: 10px auto 0;
+    max-width: 500px;
+    margin: 8px auto 0;
     color: #94a3b8;
-    line-height: 1.5;
     font-size: 13px;
 }
 
-/* ---------- Chat Area Scroll Container ---------- */
-[data-testid="stVerticalBlock"] > div:has(div.stChatMessage) {
-    overflow-y: auto !important;
-    max-height: calc(100vh - 210px) !important;
-    padding-right: 6px;
-}
-
+/* ---------- Chat Messages ---------- */
 .stChatMessage {
     background: transparent !important;
     border: 0 !important;
 }
 
 [data-testid="stChatMessageContent"] {
-    border-radius: 16px;
+    border-radius: 14px;
     background: rgba(23, 25, 35, 0.65) !important;
     border: 1px solid rgba(255, 255, 255, 0.07) !important;
     backdrop-filter: blur(12px);
@@ -263,48 +231,33 @@ div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [d
     border: 1px solid rgba(99, 102, 241, 0.3) !important;
 }
 
-/* ---------- Fixed Composer ---------- */
-.anis-composer {
-    position: fixed;
-    left: 50%;
-    bottom: 12px;
-    transform: translateX(-50%);
-    width: min(960px, calc(100% - 20px));
-    z-index: 999;
-    padding: 8px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
-    background: rgba(16, 18, 24, 0.85);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(20px);
+/* ---------- Input Form styling ---------- */
+div[data-testid="stForm"] {
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 20px !important;
+    background: rgba(16, 18, 24, 0.9) !important;
+    padding: 6px 10px !important;
+    backdrop-filter: blur(20px) !important;
 }
 
-div[data-testid="stTextArea"] textarea {
+div[data-testid="stTextInput"] input {
     background: transparent !important;
     color: #f8fafc !important;
     border: none !important;
     box-shadow: none !important;
-    resize: none !important;
     font-size: 14px !important;
 }
 
-.attach-menu-box {
-    position: fixed;
-    left: 50%;
-    bottom: 85px;
-    transform: translateX(-50%);
-    width: 280px;
-    z-index: 1000;
-    padding: 10px;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(18, 20, 28, 0.95);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+div[data-testid="stTextInput"] label {
+    display: none !important;
 }
 
-div[data-testid="stTextArea"] label {
-    display: none !important;
+.attach-menu-box {
+    padding: 8px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(18, 20, 28, 0.95);
+    margin-bottom: 8px;
 }
 </style>
 """,
@@ -319,18 +272,17 @@ top_left, top_mid, top_right = st.columns([3, 2, 2])
 
 with top_left:
     st.markdown(
-        """
+        f"""
         <div class="anis-topbar">
             <div class="anis-brand">
                 <div class="anis-logo">✦</div>
                 <div>
                     <div class="anis-name">Anis AI</div>
-                    <div class="anis-sub">Enterprise Assistant</div>
                 </div>
             </div>
-            <span class="top-credit">✦ Credit: {}</span>
+            <span class="top-credit">✦ Credit: {st.session_state.credits}</span>
         </div>
-        """.format(st.session_state.credits),
+        """,
         unsafe_allow_html=True,
     )
 
@@ -356,21 +308,21 @@ with top_right:
 if st.session_state.get("show_history", False):
     st.markdown(
         """
-        <div style="padding:10px 14px; margin:4px 0 12px; border:1px solid rgba(255,255,255,0.1); border-radius:14px; background:rgba(20,22,30,0.85);">
-            <b>🕘 Conversation History</b>
+        <div style="padding:10px; margin:4px 0 12px; border:1px solid rgba(255,255,255,0.1); border-radius:12px; background:rgba(20,22,30,0.85);">
+            <b>🕘 Chat History</b>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     if not st.session_state.history:
-        st.caption("No previous chats stored.")
+        st.caption("No previous chats.")
     else:
         for i, old_chat in enumerate(reversed(st.session_state.history[-10:])):
             title = "New Conversation"
             for msg in old_chat:
                 if msg.get("role") == "user":
-                    title = msg.get("content", "")[:50]
+                    title = msg.get("content", "")[:45]
                     break
 
             if st.button(title, key=f"history_item_{i}", use_container_width=True):
@@ -379,7 +331,7 @@ if st.session_state.get("show_history", False):
                 st.rerun()
 
 # =========================================================
-# WELCOME SCREEN
+# WELCOME SCREEN (মেসেজ না থাকলে দেখাবে)
 # =========================================================
 
 if not st.session_state.messages:
@@ -397,31 +349,30 @@ if not st.session_state.messages:
     )
 
 # =========================================================
-# CHAT MESSAGES DISPLAY
+# CHAT MESSAGES DISPLAY (সার্চ বক্সের ঠিক উপরে)
 # =========================================================
 
-for idx, message in enumerate(st.session_state.messages):
-    role = message["role"]
-    content = message["content"]
+chat_container = st.container()
 
-    with st.chat_message(role):
-        st.markdown(content)
+with chat_container:
+    for idx, message in enumerate(st.session_state.messages):
+        role = message["role"]
+        content = message["content"]
 
-    if role == "assistant":
-        a1, a2, a3, a4, _ = st.columns([1, 1, 1, 1, 8])
+        with st.chat_message(role):
+            st.markdown(content)
 
-        with a1:
-            if st.button("📋", key=f"copy_{idx}", help="Copy response"):
-                st.code(content, language=None)
-
-        with a2:
-            st.button("👍", key=f"like_{idx}", help="Like")
-
-        with a3:
-            st.button("👎", key=f"dislike_{idx}", help="Dislike")
-
-        with a4:
-            st.button("↗", key=f"share_{idx}", help="Share")
+        if role == "assistant":
+            a1, a2, a3, a4, _ = st.columns([1, 1, 1, 1, 8])
+            with a1:
+                if st.button("📋", key=f"copy_{idx}", help="Copy"):
+                    st.code(content, language=None)
+            with a2:
+                st.button("👍", key=f"like_{idx}")
+            with a3:
+                st.button("👎", key=f"dislike_{idx}")
+            with a4:
+                st.button("↗", key=f"share_{idx}")
 
 # =========================================================
 # ATTACHMENT MODAL & PREVIEW
@@ -435,22 +386,14 @@ if st.session_state.attach_mode == "camera":
         st.rerun()
 
 elif st.session_state.attach_mode == "gallery":
-    gallery_file = st.file_uploader(
-        "Upload Image",
-        type=["jpg", "jpeg", "png", "webp"],
-        key="gallery_uploader",
-    )
+    gallery_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png", "webp"], key="gallery_uploader")
     if gallery_file is not None:
         st.session_state.selected_file = gallery_file
         st.session_state.attach_mode = None
         st.rerun()
 
 elif st.session_state.attach_mode == "file":
-    doc_file = st.file_uploader(
-        "Upload Document",
-        type=None,
-        key="doc_uploader",
-    )
+    doc_file = st.file_uploader("Upload Document", type=None, key="doc_uploader")
     if doc_file is not None:
         st.session_state.selected_file = doc_file
         st.session_state.attach_mode = None
@@ -464,66 +407,51 @@ if st.session_state.selected_file is not None:
 if st.session_state.show_attach_menu:
     st.markdown("<div class='attach-menu-box'>", unsafe_allow_html=True)
     m1, m2, m3 = st.columns(3)
-
     with m1:
         if st.button("📷 Cam", key="btn_cam", use_container_width=True):
             st.session_state.attach_mode = "camera"
             st.session_state.show_attach_menu = False
             st.rerun()
-
     with m2:
         if st.button("🖼️ Img", key="btn_gal", use_container_width=True):
             st.session_state.attach_mode = "gallery"
             st.session_state.show_attach_menu = False
             st.rerun()
-
     with m3:
         if st.button("📁 File", key="btn_file", use_container_width=True):
             st.session_state.attach_mode = "file"
             st.session_state.show_attach_menu = False
             st.rerun()
-
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================================================
-# FIXED COMPOSER (TEXT INPUT & BUTTONS)
+# BOTTOM INPUT (এক লাইনে + , ইনপুট এবং ➤ বাটন)
 # =========================================================
 
-st.markdown("<div class='anis-composer'>", unsafe_allow_html=True)
+with st.form(key="chat_form", clear_on_submit=True):
+    col_plus, col_input, col_send = st.columns([1, 8, 1])
+    
+    with col_plus:
+        attach_click = st.form_submit_button("＋", help="Attach items", use_container_width=True)
+    
+    with col_input:
+        user_text = st.text_input("Message", placeholder="Ask Anis AI anything...", label_visibility="collapsed")
+    
+    with col_send:
+        submitted = st.form_submit_button("➤", help="Send Message", use_container_width=True)
 
-user_text = st.text_area(
-    "Message",
-    key="message_input",
-    height=45,
-    placeholder="Ask Anis AI anything...",
-    label_visibility="collapsed",
-)
-
-col_left, col_mid, col_right = st.columns([1, 8, 1])
-
-with col_left:
-    if st.button("＋", key="plus_btn_nav", help="Attach items", use_container_width=True):
-        st.session_state.show_attach_menu = not st.session_state.show_attach_menu
-        st.rerun()
-
-with col_mid:
-    st.empty()
-
-with col_right:
-    submitted = st.button("➤", key="send_btn_nav", help="Send Message", use_container_width=True)
-
-st.markdown("</div>", unsafe_allow_html=True)
+if attach_click:
+    st.session_state.show_attach_menu = not st.session_state.show_attach_menu
+    st.rerun()
 
 # =========================================================
-# BACKEND EXECUTION LOGIC (FULLY PRESERVED & FIXED)
+# BACKEND EXECUTION LOGIC
 # =========================================================
 
 if submitted and user_text and user_text.strip():
     prompt = user_text.strip()
 
-    st.session_state.messages.append(
-        {"role": "user", "content": prompt}
-    )
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
     collected_sources = []
     file_context = ""
@@ -534,21 +462,15 @@ if submitted and user_text and user_text.strip():
     # File Read Section
     if st.session_state.selected_file is not None:
         try:
-            file_context = smart_read_file(
-                st.session_state.selected_file,
-                ocr_api_key,
-            )
+            file_context = smart_read_file(st.session_state.selected_file, ocr_api_key)
             if file_context:
-                file_context = (
-                    "\n\n--- ATTACHED FILE CONTENT ---\n"
-                    + file_context
-                )
+                file_context = "\n\n--- ATTACHED FILE CONTENT ---\n" + file_context
         except Exception as e:
             print("File read error:", e)
 
         st.session_state.selected_file = None
 
-    # Syntax Safe URL & Search Handling
+    # URL & Search Handling
     url_match = re.search(r"https?://[^\s]+", prompt)
 
     if url_match:
@@ -558,15 +480,9 @@ if submitted and user_text and user_text.strip():
             keys_dict.get("firecrawl"),
             keys_dict.get("jina"),
         )
-        external_context = (
-            "\n\n--- URL CONTENT ---\n"
-            + scraped_text
-        )
+        external_context = "\n\n--- URL CONTENT ---\n" + scraped_text
     else:
-        should_search = needs_web_search(
-            prompt,
-            keys_dict.get("groq"),
-        )
+        should_search = needs_web_search(prompt, keys_dict.get("groq"))
         if should_search:
             search_text, collected_sources = smart_search(
                 prompt,
@@ -575,16 +491,10 @@ if submitted and user_text and user_text.strip():
                 keys_dict.get("jina"),
             )
             if search_text:
-                external_context = (
-                    "\n\n--- LIVE WEB SEARCH RESULTS ---\n"
-                    + search_text
-                )
+                external_context = "\n\n--- LIVE WEB SEARCH RESULTS ---\n" + search_text
 
     # Model Routing
-    router_info = select_model_by_task(
-        prompt,
-        file_context + external_context,
-    )
+    router_info = select_model_by_task(prompt, file_context + external_context)
 
     # Memory Management
     managed_messages = st.session_state.messages
@@ -614,62 +524,46 @@ if submitted and user_text and user_text.strip():
     final_prompt = prompt + file_context + external_context
     ai_messages.append({"role": "user", "content": final_prompt})
 
-    # Response Stream Generation
-    with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        full_response = ""
-        has_error = False
+    # Response Stream Generation inside chat container
+    with chat_container:
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+            has_error = False
 
-        try:
-            response_placeholder.markdown("🧠 Processing...")
+            try:
+                response_placeholder.markdown("🧠 Processing...")
 
-            stream = provider_aware_ai_fallback(
-                keys_dict,
-                router_info,
-                ai_messages,
-            )
+                stream = provider_aware_ai_fallback(keys_dict, router_info, ai_messages)
 
-            for chunk in stream:
-                if chunk == "ERROR_ALL_FAILED" or chunk.startswith("দুঃখিত"):
-                    has_error = True
-                    break
+                for chunk in stream:
+                    if chunk == "ERROR_ALL_FAILED" or chunk.startswith("দুঃখিত"):
+                        has_error = True
+                        break
 
-                full_response += chunk
-                response_placeholder.markdown(full_response + "▌")
+                    full_response += chunk
+                    response_placeholder.markdown(full_response + "▌")
 
-            if has_error or not full_response:
-                error_message = (
-                    "দুঃখিত, কিছুক্ষণ অপেক্ষা করুন। "
-                    "টেকনিক্যাল সমস্যা হয়েছে, ঠিক করা হচ্ছে।"
-                )
+                if has_error or not full_response:
+                    error_message = "দুঃখিত, কিছুক্ষণ অপেক্ষা করুন। টেকনিক্যাল সমস্যা হয়েছে, ঠিক করা হচ্ছে।"
+                    response_placeholder.markdown(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": error_message})
+                else:
+                    if collected_sources:
+                        full_response += "\n\n**Sources**\n"
+                        for source in sorted(set(collected_sources)):
+                            full_response += f"- {source}\n"
+
+                    response_placeholder.markdown(full_response)
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+            except Exception as e:
+                print("AI response error:", e)
+                error_message = "দুঃখিত, কিছুক্ষণ অপেক্ষা করুন। টেকনিক্যাল সমস্যা হয়েছে, ঠিক করা হচ্ছে।"
                 response_placeholder.markdown(error_message)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": error_message}
-                )
-            else:
-                if collected_sources:
-                    full_response += "\n\n**Sources**\n"
-                    for source in sorted(set(collected_sources)):
-                        full_response += f"- {source}\n"
-
-                response_placeholder.markdown(full_response)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": full_response}
-                )
-
-        except Exception as e:
-            print("AI response error:", e)
-            error_message = (
-                "দুঃখিত, কিছুক্ষণ অপেক্ষা করুন। "
-                "টেকনিক্যাল সমস্যা হয়েছে, ঠিক করা হচ্ছে।"
-            )
-            response_placeholder.markdown(error_message)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": error_message}
-            )
+                st.session_state.messages.append({"role": "assistant", "content": error_message})
 
     if st.session_state.credits > 0:
         st.session_state.credits -= 1
 
-    st.session_state.message_input = ""
     st.rerun()
