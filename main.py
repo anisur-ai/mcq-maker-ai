@@ -329,7 +329,7 @@ st.subheader("Attachments")
 # ATTACHMENT TYPE SELECTION
 # ---------------------------------------------------------
 if st.button(
-    "📎 Attach",
+    "Upload pictures📷",
     use_container_width=True,
     key="attach_button",
 ):
