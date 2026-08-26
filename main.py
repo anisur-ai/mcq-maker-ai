@@ -775,7 +775,7 @@ if submitted and user_text and user_text.strip():
                 external_context = (
                     "\n\n--- LIVE WEB SEARCH RESULTS ---\n"
                     + search_text
-                )
+)
                 
     # -----------------------------------------------------
     # Model router
