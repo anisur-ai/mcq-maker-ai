@@ -1,8 +1,10 @@
 import streamlit as st
 import re
 import html
+from datetime import datetime, timedelta
 
 from analytics import log_usage
+
 from helpers import (
     smart_read_file,
     needs_web_search,
@@ -13,29 +15,26 @@ from helpers import (
     provider_aware_ai_fallback,
 )
 
+
 # =========================================================
 # PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
     page_title="Anis AI",
-    page_icon="✨",
+    page_icon="✦",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
+
 # =========================================================
-# ANALYTICS
+# CONSTANTS
 # =========================================================
 
-if "analytics_logged" not in st.session_state:
-    user_id = st.session_state.get("user_id")
-    if not user_id:
-        user_id = f"user_{id(st.session_state)}"
-        st.session_state.user_id = user_id
+HISTORY_DAYS = 5
+MAX_HISTORY_ITEMS = 50
 
-    log_usage(user_id, event_type="visit")
-    st.session_state.analytics_logged = True
 
 # =========================================================
 # SESSION STATE
@@ -43,17 +42,43 @@ if "analytics_logged" not in st.session_state:
 
 defaults = {
     "messages": [],
+    "history": [],
     "chat_summary": "",
     "show_attach_menu": False,
     "attach_mode": None,
     "selected_file": None,
-    "history": [],
     "credits": 100,
+    "analytics_logged": False,
+    "processing": False,
 }
 
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
+
+
+# =========================================================
+# USER ID + ANALYTICS
+# =========================================================
+
+if not st.session_state.analytics_logged:
+
+    user_id = st.session_state.get("user_id")
+
+    if not user_id:
+        user_id = f"user_{id(st.session_state)}"
+        st.session_state.user_id = user_id
+
+    try:
+        log_usage(
+            user_id,
+            event_type="visit"
+        )
+    except Exception:
+        pass
+
+    st.session_state.analytics_logged = True
+
 
 # =========================================================
 # API KEYS
@@ -72,425 +97,658 @@ keys_dict = {
 
 ocr_api_key = st.secrets.get("OCR_API_KEY")
 
+
 # =========================================================
-# GEMINI STYLED CSS CUSTOMIZATION
+# 5-DAY HISTORY CLEANUP
+# =========================================================
+
+def cleanup_old_history():
+
+    cutoff = datetime.now() - timedelta(days=HISTORY_DAYS)
+
+    cleaned_history = []
+
+    for chat in st.session_state.history:
+
+        try:
+            created_at = chat.get("created_at")
+
+            if isinstance(created_at, str):
+                created_at = datetime.fromisoformat(created_at)
+
+            if created_at and created_at >= cutoff:
+                cleaned_history.append(chat)
+
+        except Exception:
+            continue
+
+    st.session_state.history = cleaned_history[-MAX_HISTORY_ITEMS:]
+
+
+cleanup_old_history()
+
+
+# =========================================================
+# SAVE CURRENT CHAT
+# =========================================================
+
+def save_current_chat():
+
+    if not st.session_state.messages:
+        return
+
+    first_user_message = "New Conversation"
+
+    for message in st.session_state.messages:
+
+        if message.get("role") == "user":
+
+            content = message.get("content", "").strip()
+
+            if content:
+                first_user_message = content[:45]
+                break
+
+    chat_record = {
+        "id": datetime.now().timestamp(),
+        "created_at": datetime.now().isoformat(),
+        "title": first_user_message,
+        "messages": list(st.session_state.messages),
+    }
+
+    st.session_state.history.append(chat_record)
+
+    st.session_state.history = (
+        st.session_state.history[-MAX_HISTORY_ITEMS:]
+    )
+
+
+# =========================================================
+# NEW CHAT
+# =========================================================
+
+def start_new_chat():
+
+    if st.session_state.messages:
+        save_current_chat()
+
+    st.session_state.messages = []
+    st.session_state.chat_summary = ""
+    st.session_state.selected_file = None
+    st.session_state.attach_mode = None
+    st.session_state.show_attach_menu = False
+    st.session_state.processing = False
+
+    st.rerun()
+
+
+# =========================================================
+# LOAD CHAT
+# =========================================================
+
+def load_chat(chat):
+
+    st.session_state.messages = list(
+        chat.get("messages", [])
+    )
+
+    st.session_state.chat_summary = ""
+    st.session_state.selected_file = None
+    st.session_state.attach_mode = None
+    st.session_state.show_attach_menu = False
+
+    st.rerun()
+
+
+# =========================================================
+# PROFESSIONAL DARK UI
 # =========================================================
 
 st.markdown(
     """
-<style>
-/* Global Layout Base */
-html, body, [data-testid="stAppViewContainer"] {
-    background: #131314 !important;
-    color: #e3e2e6 !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
+    <style>
 
-[data-testid="stHeader"] {
-    display: none !important;
-}
+    /* ==============================================
+       GLOBAL
+       ============================================== */
 
-footer, [data-testid="collapsedControl"] {
-    display: none !important;
-}
+    #MainMenu {
+        visibility: hidden;
+    }
 
-.block-container {
-    max-width: 850px !important;
-    padding-top: 60px !important;
-    padding-bottom: 110px !important;
-    margin: auto;
-}
+    footer {
+        visibility: hidden;
+    }
 
-/* Fixed Header Navbar (Ref: Image 1) */
-.gemini-topbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    background: #131314;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    z-index: 999;
-}
+    header {
+        visibility: hidden;
+    }
 
-.gemini-title {
-    font-size: 17px;
-    font-weight: 500;
-    color: #e3e2e6;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+    .stApp {
+        background:
+            radial-gradient(
+                circle at 15% 5%,
+                rgba(76, 141, 246, 0.08),
+                transparent 28%
+            ),
+            radial-gradient(
+                circle at 85% 10%,
+                rgba(120, 90, 255, 0.07),
+                transparent 28%
+            ),
+            #131314;
 
-/* Welcome Screen */
-.welcome-wrap {
-    text-align: left;
-    padding: 40px 10px 20px;
-}
+        color: #e8eaed;
+    }
 
-.welcome-orb {
-    font-size: 32px;
-    color: #4c8df6;
-    margin-bottom: 12px;
-}
 
-.welcome-title {
-    font-size: 32px;
-    font-weight: 500;
-    color: #e3e2e6;
-    margin: 0 0 8px;
-}
+    /* ==============================================
+       MAIN CONTAINER
+       ============================================== */
 
-/* Chat Messages */
-.stChatMessage {
-    background: transparent !important;
-    border: 0 !important;
-    padding: 12px 0 !important;
-}
+    .block-container {
+        max-width: 1050px;
+        padding-top: 1rem;
+        padding-bottom: 7rem;
+    }
 
-[data-testid="stChatMessageContent"] {
-    border-radius: 18px;
-    background: #1e1f20 !important;
-    color: #e3e2e6 !important;
-}
 
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] {
-    background: #282a2c !important;
-}
+    /* ==============================================
+       TOP BAR
+       ============================================== */
 
-/* Bottom Input Floating Pill Container (Ref: Image 3) */
-div[data-testid="stForm"] {
-    position: fixed;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(820px, calc(100% - 24px));
-    background: #1e1f20 !important;
-    border: 1px solid #333537 !important;
-    border-radius: 28px !important;
-    padding: 4px 12px !important;
-    z-index: 1000;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-}
+    .anis-navbar {
+        height: 58px;
 
-div[data-testid="stTextInput"] input {
-    background: transparent !important;
-    color: #e3e2e6 !important;
-    border: none !important;
-    box-shadow: none !important;
-    font-size: 15px !important;
-}
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
 
-div[data-testid="stTextInput"] label {
-    display: none !important;
-}
+        padding: 0 4px;
 
-/* Custom Buttons Styling */
-.stFormSubmitButton > button {
-    background: transparent !important;
-    border: none !important;
-    color: #c4c6d0 !important;
-    font-size: 20px !important;
-    box-shadow: none !important;
-}
+        margin-bottom: 20px;
 
-.send-btn-pill > button {
-    background: #4c8df6 !important;
-    color: #ffffff !important;
-    border-radius: 50% !important;
-    width: 40px !important;
-    height: 40px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
+        border-bottom: 1px solid #292a2d;
+    }
 
-/* Bottom Drawer Attachment Sheet (Ref: Image 2) */
-.attach-sheet {
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(800px, calc(100% - 32px));
-    background: #282a2c;
-    border-radius: 24px 24px 16px 16px;
-    padding: 16px;
-    z-index: 1001;
-    border: 1px solid #3d3f42;
-}
 
-.sheet-handle {
-    width: 32px;
-    height: 4px;
-    background: #8e918f;
-    border-radius: 2px;
-    margin: 0 auto 16px;
-}
-</style>
-""",
+    .anis-brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+
+        font-size: 21px;
+        font-weight: 700;
+
+        color: #f1f3f4;
+
+        letter-spacing: -0.4px;
+    }
+
+
+    .anis-logo {
+        width: 31px;
+        height: 31px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 10px;
+
+        background:
+            linear-gradient(
+                135deg,
+                #477df5,
+                #7658e8
+            );
+
+        color: white;
+
+        font-size: 17px;
+
+        box-shadow:
+            0 6px 22px
+            rgba(76, 100, 240, 0.25);
+    }
+
+
+    /* ==============================================
+       WELCOME
+       ============================================== */
+
+    .welcome-wrapper {
+
+        min-height: 55vh;
+
+        display: flex;
+
+        flex-direction: column;
+
+        align-items: center;
+
+        justify-content: center;
+
+        text-align: center;
+    }
+
+
+    .welcome-icon {
+
+        width: 68px;
+        height: 68px;
+
+        display: flex;
+
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 20px;
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(76, 141, 246, 0.18),
+                rgba(120, 90, 255, 0.16)
+            );
+
+        border: 1px solid
+            rgba(255,255,255,0.06);
+
+        font-size: 30px;
+
+        margin-bottom: 22px;
+    }
+
+
+    .welcome-title {
+
+        font-size: 34px;
+
+        font-weight: 650;
+
+        color: #f1f3f4;
+
+        letter-spacing: -0.8px;
+
+        margin-bottom: 8px;
+    }
+
+
+    .welcome-subtitle {
+
+        max-width: 600px;
+
+        font-size: 15px;
+
+        line-height: 1.6;
+
+        color: #9aa0a6;
+    }
+
+
+    /* ==============================================
+       CHAT
+       ============================================== */
+
+    [data-testid="stChatMessage"] {
+
+        padding-top: 8px;
+        padding-bottom: 8px;
+
+        margin-bottom: 8px;
+    }
+
+
+    [data-testid="stChatMessageContent"] {
+
+        font-size: 15px;
+
+        line-height: 1.7;
+
+        color: #e4e6eb;
+    }
+
+
+    /* ==============================================
+       BUTTONS
+       ============================================== */
+
+    .stButton > button {
+
+        border-radius: 12px;
+
+        border: 1px solid #303134;
+
+        background: #1b1c1f;
+
+        color: #e8eaed;
+
+        transition: all 0.2s ease;
+    }
+
+
+    .stButton > button:hover {
+
+        border-color: #5f6368;
+
+        background: #232428;
+
+        transform: translateY(-1px);
+    }
+
+
+    /* ==============================================
+       CHAT INPUT
+       ============================================== */
+
+    [data-testid="stChatInput"] {
+
+        border-radius: 18px;
+    }
+
+
+    [data-testid="stChatInput"] textarea {
+
+        background: #1e1f22 !important;
+
+        border: 1px solid #34363a !important;
+
+        border-radius: 18px !important;
+
+        color: #f1f3f4 !important;
+
+        padding: 16px !important;
+    }
+
+
+    [data-testid="stChatInput"] textarea:focus {
+
+        border-color: #5f8ff7 !important;
+
+        box-shadow:
+            0 0 0 1px
+            rgba(95,143,247,0.25) !important;
+    }
+
+
+    /* ==============================================
+       SIDEBAR
+       ============================================== */
+
+    section[data-testid="stSidebar"] {
+
+        background: #17181a;
+
+        border-right: 1px solid #292a2d;
+    }
+
+
+    section[data-testid="stSidebar"]
+    .block-container {
+
+        padding-top: 1.3rem;
+    }
+
+
+    /* ==============================================
+       HISTORY ITEM
+       ============================================== */
+
+    .history-label {
+
+        font-size: 11px;
+
+        font-weight: 600;
+
+        text-transform: uppercase;
+
+        letter-spacing: 0.7px;
+
+        color: #777b82;
+
+        margin-top: 18px;
+
+        margin-bottom: 7px;
+    }
+
+
+    /* ==============================================
+       ATTACHMENT
+       ============================================== */
+
+    .attachment-card {
+
+        background: #1b1c1f;
+
+        border: 1px solid #303134;
+
+        border-radius: 14px;
+
+        padding: 12px 15px;
+
+        margin: 10px 0;
+
+        color: #c9cdd2;
+    }
+
+
+    /* ==============================================
+       CREDIT BADGE
+       ============================================== */
+
+    .credit-badge {
+
+        display: inline-block;
+
+        padding: 6px 10px;
+
+        border-radius: 10px;
+
+        background: rgba(76,141,246,0.10);
+
+        border: 1px solid
+            rgba(76,141,246,0.20);
+
+        color: #9bbcff;
+
+        font-size: 12px;
+    }
+
+
+    /* ==============================================
+       MOBILE
+       ============================================== */
+
+    @media (max-width: 768px) {
+
+        .block-container {
+
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+
+        .welcome-title {
+
+            font-size: 27px;
+        }
+
+        .welcome-subtitle {
+
+            font-size: 14px;
+        }
+
+        .anis-brand {
+
+            font-size: 19px;
+        }
+    }
+
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
-# =========================================================
-# SIDEBAR (HISTORY DRAGGER)
-# =========================================================
-
-with st.sidebar:
-    st.markdown("### 🕘 Chat History")
-    if st.button("➕ New Chat", use_container_width=True):
-        if st.session_state.messages:
-            st.session_state.history.append(list(st.session_state.messages))
-        st.session_state.messages = []
-        st.session_state.chat_summary = ""
-        st.session_state.selected_file = None
-        st.rerun()
-
-    st.markdown("---")
-    if not st.session_state.history:
-        st.caption("No previous history")
-    else:
-        for i, old_chat in enumerate(reversed(st.session_state.history[-15:])):
-            title = "Conversation"
-            for msg in old_chat:
-                if msg.get("role") == "user":
-                    title = msg.get("content", "")[:30]
-                    break
-            if st.button(title, key=f"hist_{i}", use_container_width=True):
-                st.session_state.messages = old_chat
-                st.rerun()
 
 # =========================================================
-# TOP NAVBAR (1st Image Inspired)
+# TOP NAVBAR
 # =========================================================
 
-h_left, h_right = st.columns([6, 1])
+nav_left, nav_right = st.columns([7, 3])
 
-with h_left:
+
+with nav_left:
+
     st.markdown(
         """
-        <div class="gemini-topbar">
-            <div class="gemini-title">
-                ✦ Anis AI
+        <div class="anis-navbar">
+
+            <div class="anis-brand">
+
+                <div class="anis-logo">
+                    ✦
+                </div>
+
+                Anis AI
+
             </div>
+
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-with h_right:
-    if st.button("➕ New", key="top_new_chat"):
-        if st.session_state.messages:
-            st.session_state.history.append(list(st.session_state.messages))
-        st.session_state.messages = []
-        st.session_state.chat_summary = ""
-        st.session_state.selected_file = None
-        st.rerun()
+
+with nav_right:
+
+    if st.button(
+        "＋ New Chat",
+        key="top_new_chat",
+        use_container_width=True,
+    ):
+
+        start_new_chat()
+
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+with st.sidebar:
+
+    st.markdown(
+        """
+        <div class="anis-brand">
+            <div class="anis-logo">✦</div>
+            Anis AI
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.write("")
+
+    if st.button(
+        "＋  New Chat",
+        key="sidebar_new_chat",
+        use_container_width=True,
+    ):
+
+        start_new_chat()
+
+
+    st.markdown("---")
+
+
+    # Credits
+
+    st.markdown(
+        f"""
+        <div class="credit-badge">
+            ✦ {st.session_state.credits} credits
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+    st.markdown(
+        '<div class="history-label">Recent Chats</div>',
+        unsafe_allow_html=True,
+    )
+
+
+    if not st.session_state.history:
+
+        st.caption(
+            "Your last 5 days of chats will appear here."
+        )
+
+    else:
+
+        for chat in reversed(
+            st.session_state.history
+        ):
+
+            title = chat.get(
+                "title",
+                "Conversation"
+            )
+
+            if st.button(
+                f"💬 {title}",
+                key=f"history_{chat.get('id')}",
+                use_container_width=True,
+            ):
+
+                load_chat(chat)
+
 
 # =========================================================
 # WELCOME SCREEN
 # =========================================================
 
 if not st.session_state.messages:
+
     st.markdown(
         """
-        <div class="welcome-wrap">
-            <div class="welcome-orb">✦</div>
-            <h1 class="welcome-title">How can Anis AI help you today?</h1>
+        <div class="welcome-wrapper">
+
+            <div class="welcome-icon">
+                ✦
+            </div>
+
+            <div class="welcome-title">
+                Hi Anis, how can I help?
+            </div>
+
+            <div class="welcome-subtitle">
+                Ask questions, analyze files,
+                search the web, or explore ideas
+                with Anis AI.
+            </div>
+
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# =========================================================
-# CHAT CONTAINER (STAYS ABOVE INPUT)
-# =========================================================
-
-chat_container = st.container()
-
-with chat_container:
-    for idx, message in enumerate(st.session_state.messages):
-        role = message["role"]
-        content = message["content"]
-
-        with st.chat_message(role):
-            st.markdown(content)
 
 # =========================================================
-# ATTACHMENT MODAL SHEET (2nd Image Inspired)
+# CHAT DISPLAY
 # =========================================================
 
-if st.session_state.show_attach_menu:
-    st.markdown('<div class="attach-sheet"><div class="sheet-handle"></div>', unsafe_allow_html=True)
-    
-    if st.button("📷   Camera", use_container_width=True, key="opt_cam"):
-        st.session_state.attach_mode = "camera"
-        st.session_state.show_attach_menu = False
-        st.rerun()
+for message in st.session_state.messages:
 
-    if st.button("🖼️   Gallery", use_container_width=True, key="opt_gal"):
-        st.session_state.attach_mode = "gallery"
-        st.session_state.show_attach_menu = False
-        st.rerun()
+    role = message.get("role")
 
-    if st.button("📁   Files", use_container_width=True, key="opt_file"):
-        st.session_state.attach_mode = "file"
-        st.session_state.show_attach_menu = False
-        st.rerun()
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# Attachment Pickers Execution
-if st.session_state.attach_mode == "camera":
-    cam = st.camera_input("Take Photo")
-    if cam:
-        st.session_state.selected_file = cam
-        st.session_state.attach_mode = None
-        st.rerun()
-
-elif st.session_state.attach_mode == "gallery":
-    gal = st.file_uploader("Select Image", type=["jpg", "png", "jpeg", "webp"], key="gal_up")
-    if gal:
-        st.session_state.selected_file = gal
-        st.session_state.attach_mode = None
-        st.rerun()
-
-elif st.session_state.attach_mode == "file":
-    doc = st.file_uploader("Select File", type=None, key="doc_up")
-    if doc:
-        st.session_state.selected_file = doc
-        st.session_state.attach_mode = None
-        st.rerun()
-
-# Attachment Preview
-if st.session_state.selected_file is not None:
-    f_name = getattr(st.session_state.selected_file, "name", "Image/File Attached")
-    st.info(f"📎 Attached: {html.escape(f_name)}")
-
-# =========================================================
-# CAPSULE INPUT BAR (3rd Image Inspired)
-# =========================================================
-
-with st.form(key="chat_form", clear_on_submit=True):
-    col_plus, col_input, col_send = st.columns([1, 8, 1])
-
-    with col_plus:
-        attach_clicked = st.form_submit_button("＋")
-
-    with col_input:
-        user_text = st.text_input("Message", placeholder="Ask Anis AI...", label_visibility="collapsed")
-
-    with col_send:
-        submitted = st.form_submit_button("➔")
-
-if attach_clicked:
-    st.session_state.show_attach_menu = not st.session_state.show_attach_menu
-    st.rerun()
-
-# =========================================================
-# BACKEND AI PROCESSING
-# =========================================================
-
-has_file = st.session_state.selected_file is not None
-if submitted and (user_text.strip() or has_file):
-    prompt = user_text.strip() if user_text else "Analyze this attached file/image."
-
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    collected_sources = []
-    file_context = ""
-    external_context = ""
-    scraped_text = ""
-    search_text = ""
-
-    if has_file:
-        try:
-            file_context = smart_read_file(st.session_state.selected_file, ocr_api_key)
-            if file_context:
-                file_context = "\n\n--- ATTACHED FILE CONTENT ---\n" + file_context
-        except Exception as e:
-            print("File read error:", e)
-
-        st.session_state.selected_file = None
-
-    url_match = re.search(r"https?://[^\s]+", prompt)
-
-    if url_match:
-        target_url = url_match.group(0)
-        scraped_text, collected_sources = smart_scrape(
-            target_url,
-            keys_dict.get("firecrawl"),
-            keys_dict.get("jina"),
-        )
-        external_context = "\n\n--- URL CONTENT ---\n" + scraped_text
-    else:
-        should_search = needs_web_search(prompt, keys_dict.get("groq"))
-        if should_search:
-            search_text, collected_sources = smart_search(
-                prompt,
-                keys_dict.get("serper"),
-                keys_dict.get("tavily"),
-                keys_dict.get("jina"),
-            )
-            if search_text:
-                external_context = "\n\n--- LIVE WEB SEARCH RESULTS ---\n" + search_text
-
-    router_info = select_model_by_task(prompt, file_context + external_context)
-    managed_messages = st.session_state.messages
-
-    system_prompt = (
-        "You are Anis AI, a professional autonomous AI assistant.\n\n"
-        "Rules:\n"
-        "- Respond concisely and directly.\n"
-        "- Reply in Bengali if user writes in Bengali.\n"
-        "- Analyze attached context or files properly.\n"
+    content = message.get(
+        "content",
+        ""
     )
 
-    ai_messages = [{"role": "system", "content": system_prompt}]
-    for msg in managed_messages:
-        ai_messages.append(msg)
+    if role in ["user", "assistant"]:
 
-    final_prompt = prompt + file_context + external_context
-    ai_messages.append({"role": "user", "content": final_prompt})
+        with st.chat_message(role):
 
-    with chat_container:
-        with st.chat_message("assistant"):
-            response_placeholder = st.empty()
-            full_response = ""
-            has_error = False
-
-            try:
-                stream = provider_aware_ai_fallback(keys_dict, router_info, ai_messages)
-
-                for chunk in stream:
-                    if chunk == "ERROR_ALL_FAILED" or chunk.startswith("দুঃখিত"):
-                        has_error = True
-                        break
-
-                    full_response += chunk
-                    response_placeholder.markdown(full_response + "▌")
-
-                if has_error or not full_response:
-                    error_message = "দুঃখিত, টেকনিক্যাল সমস্যা হয়েছে। আবার চেষ্টা করুন।"
-                    response_placeholder.markdown(error_message)
-                    st.session_state.messages.append({"role": "assistant", "content": error_message})
-                else:
-                    if collected_sources:
-                        full_response += "\n\n**Sources**\n"
-                        for source in sorted(set(collected_sources)):
-                            full_response += f"- {source}\n"
-
-                    response_placeholder.markdown(full_response)
-                    st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-            except Exception as e:
-                error_message = "দুঃখিত, টেকনিক্যাল সমস্যা হয়েছে। আবার চেষ্টা করুন।"
-                response_placeholder.markdown(error_message)
-                st.session_state.messages.append({"role": "assistant", "content": error_message})
-
-    if st.session_state.credits > 0:
-        st.session_state.credits -= 1
-
-    st.rerun()
+            st.markdown(content)
