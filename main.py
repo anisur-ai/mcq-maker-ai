@@ -335,8 +335,8 @@ if st.button(
 ):
     st.session_state.show_attach_menu = (
         not st.session_state.show_attach_menu
-        )
-    if st.session_state.show_attach_menu:
+      ) 
+if st.session_state.show_attach_menu:
 
     attach_col1, attach_col2, attach_col3 = st.columns(3)
 
@@ -368,8 +368,8 @@ if st.button(
         ):
             st.session_state.attach_mode = "file"
             st.session_state.show_attach_menu = False
-            st.rerun()
-    
+            st.rerun()    
+        
 # =========================================================
 # CAMERA
 # =========================================================
