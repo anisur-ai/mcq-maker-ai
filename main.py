@@ -756,14 +756,13 @@ if submitted and user_text and user_text.strip():
             "\n\n--- URL CONTENT ---\n"
             + scraped_text
         )
-
     else:
         should_search = needs_web_search(
             prompt,
             keys_dict.get("groq"),
         )
-           
-           if should_search:
+
+        if should_search:
             search_text, collected_sources = smart_search(
                 prompt,
                 keys_dict.get("serper"),
@@ -771,7 +770,7 @@ if submitted and user_text and user_text.strip():
                 keys_dict.get("jina"),
             )
 
-            if search_text:
+           if search_text:
                 external_context = (
                     "\n\n--- LIVE WEB SEARCH RESULTS ---\n"
                     + search_text
