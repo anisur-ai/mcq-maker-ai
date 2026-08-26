@@ -1206,53 +1206,6 @@ st.divider()
 # CURRENT CHAT CONTROLS
 # ---------------------------------------------------------
 
-control_col1, control_col2, control_col3 = st.columns(
-    [1, 1, 4]
-)
-
-
-with control_col1:
-
-    if st.button(
-        "＋ New Chat",
-        key="final_new_chat",
-        use_container_width=True,
-    ):
-
-        start_new_chat()
-
-
-with control_col2:
-
-    if st.button(
-        "🗑 Clear",
-        key="clear_current_chat",
-        use_container_width=True,
-    ):
-
-        st.session_state.messages = []
-        st.session_state.chat_summary = ""
-        st.session_state.selected_file = None
-        st.session_state.attach_mode = None
-        st.session_state.show_attach_menu = False
-
-        st.rerun()
-
-
-# ---------------------------------------------------------
-# APP INFORMATION
-# ---------------------------------------------------------
-
-if st.session_state.messages:
-
-    st.caption(
-        f"Messages in this chat: "
-        f"{len(st.session_state.messages)}"
-    )
-
-st.caption(
-    "Anis AI • Chat history is kept for up to 5 days"
-)
 # =========================================================
 # PART 9 - FINAL ERROR PROTECTION
 # =========================================================
