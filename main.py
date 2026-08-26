@@ -328,43 +328,48 @@ st.subheader("Attachments")
 # ---------------------------------------------------------
 # ATTACHMENT TYPE SELECTION
 # ---------------------------------------------------------
+if st.button(
+    "📎 Attach",
+    use_container_width=True,
+    key="attach_button",
+):
+    st.session_state.show_attach_menu = (
+        not st.session_state.show_attach_menu
+        )
+    if st.session_state.show_attach_menu:
 
-attachment_col1, attachment_col2, attachment_col3 = st.columns(3)
+    attach_col1, attach_col2, attach_col3 = st.columns(3)
 
+    with attach_col1:
+        if st.button(
+            "📷 Camera",
+            use_container_width=True,
+            key="menu_camera",
+        ):
+            st.session_state.attach_mode = "camera"
+            st.session_state.show_attach_menu = False
+            st.rerun()
 
-with attachment_col1:
+    with attach_col2:
+        if st.button(
+            "🖼️ Gallery",
+            use_container_width=True,
+            key="menu_gallery",
+        ):
+            st.session_state.attach_mode = "gallery"
+            st.session_state.show_attach_menu = False
+            st.rerun()
 
-    if st.button(
-        "📷 Camera",
-        use_container_width=True,
-        key="attachment_camera",
-    ):
-
-        st.session_state.attach_mode = "camera"
-
-
-with attachment_col2:
-
-    if st.button(
-        "🖼️ Gallery",
-        use_container_width=True,
-        key="attachment_gallery",
-    ):
-
-        st.session_state.attach_mode = "gallery"
-
-
-with attachment_col3:
-
-    if st.button(
-        "📁 Files",
-        use_container_width=True,
-        key="attachment_files",
-    ):
-
-        st.session_state.attach_mode = "file"
-
-
+    with attach_col3:
+        if st.button(
+            "📁 Files",
+            use_container_width=True,
+            key="menu_files",
+        ):
+            st.session_state.attach_mode = "file"
+            st.session_state.show_attach_menu = False
+            st.rerun()
+    
 # =========================================================
 # CAMERA
 # =========================================================
