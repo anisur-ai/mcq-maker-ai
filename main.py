@@ -55,6 +55,17 @@ st.markdown("""
     background-size: 300% 300%;
     animation: gradientShift 18s ease infinite;
 }
+/* ওপরের হেডার বা ন্যাভিগেশন বার ডার্ক করার জন্য */
+header[data-testid="stHeader"] {
+    background-color: transparent !important;
+}
+
+/* নিচের চ্যাট ইনপুট বক্স ডার্ক করার জন্য */
+[data-testid="stChatInput"] {
+    background-color: #1e1e1e !important;
+    color: #ffffff !important;
+}
+
 @keyframes gradientShift {
     0%   { background-position: 0% 50%; }
     50%  { background-position: 100% 50%; }
