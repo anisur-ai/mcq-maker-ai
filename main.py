@@ -1,20 +1,43 @@
 import streamlit as st
-import re
-from datetime import datetime, timedelta
+import io
+import requests
+import docx
+import fitz  # PyMuPDF
+import pypdf
+import google.generativeai as genai
+from groq import Groq
+from openai import OpenAI
 
 from analytics import log_usage
-from helpers import (
-    smart_read_file,
-    needs_web_search,
-    smart_search,
-    smart_scrape,
-    select_model_by_task,
-    manage_conversation_memory,
-    provider_aware_ai_fallback,
-    create_chat_title,
-    cleanup_old_history,
-    MAX_HISTORY_CHATS,
-)
+
+# =========================================================
+# SAFE HELPERS IMPORT (helpers.py এর সাথে সংযোগ রক্ষা করতে)
+# =========================================================
+try:
+    from helpers import (
+        smart_read_file,
+        needs_web_search,
+        smart_search,
+        smart_scrape,
+        select_model_by_task,
+        manage_conversation_memory,
+        provider_aware_ai_fallback,
+    )
+except ImportError as e:
+    st.error(f"Helpers Import Error: {e}")
+
+# ফলব্যাক ফাংশন (যদি helpers.py এ এগুলো না থাকে)
+try:
+    from helpers import create_chat_title
+except ImportError:
+    def create_chat_title(text):
+        return text[:30] if text else "New Chat"
+
+try:
+    from helpers import cleanup_old_history
+except ImportError:
+    def cleanup_old_history(history):
+        return history
 
 
 # =========================================================
@@ -39,36 +62,15 @@ if "messages" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
-if "chat_summary" not in st.session_state:
-    st.session_state.chat_summary = ""
-
-if "selected_file" not in st.session_state:
-    st.session_state.selected_file = None
-
-if "attach_mode" not in st.session_state:
-    st.session_state.attach_mode = None
-
-if "show_attach_menu" not in st.session_state:
-    st.session_state.show_attach_menu = False
-
-if "processing" not in st.session_state:
-    st.session_state.processing = False
-
 if "active_mode" not in st.session_state:
     st.session_state.active_mode = None
 
-if "attached_image" not in st.session_state:
-    st.session_state.attached_image = None
-
-if "pending_user_message" not in st.session_state:
-    st.session_state.pending_user_message = None
-
-if "account_email" not in st.session_state:
-    st.session_state.account_email = None
+if "mobile_sidebar_open" not in st.session_state:
+    st.session_state.mobile_sidebar_open = False
 
 
 # =========================================================
-# ANIS AI — MOBILE APP STYLE (CSS)
+# STYLING (MOBILE APP STYLE CSS)
 # =========================================================
 
 st.markdown(
@@ -77,11 +79,6 @@ st.markdown(
     html, body, [data-testid="stAppViewContainer"] {
         background: #000000 !important;
         color: #ffffff !important;
-    }
-    [data-testid="stAppViewContainer"] {
-        max-width: 100vw !important;
-        min-height: 100dvh !important;
-        overflow-x: hidden !important;
     }
     [data-testid="stAppViewBlockContainer"] {
         max-width: 700px !important;
@@ -96,35 +93,6 @@ st.markdown(
     }
     #MainMenu, footer {
         visibility: hidden;
-    }
-
-    /* মোবাইল হেডার এবং কার্ড ডিজাইন */
-    .anis-header {
-        width: 100%;
-        height: 54px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 4px;
-        margin-bottom: 8px;
-    }
-    .anis-brand {
-        font-size: 20px;
-        font-weight: 600;
-        color: #ffffff;
-        letter-spacing: -0.3px;
-    }
-    .anis-profile {
-        width: 34px;
-        height: 34px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #303030;
-        color: #ffffff;
-        font-size: 15px;
-        font-weight: 600;
     }
     .user-msg {
         background: #303030;
@@ -167,22 +135,18 @@ st.markdown(
 menu_col, title_col, profile_col = st.columns([1, 5, 1], vertical_alignment="center")
 
 with menu_col:
-    menu_clicked = st.button("☰", key="mobile_menu_button", help="Open menu")
+    menu_clicked = st.button("☰", key="mobile_menu_button")
 
 with title_col:
     st.markdown('<div style="font-size:18px; font-weight:600; color:#fff; text-align:center;">✦ Anis AI</div>', unsafe_allow_html=True)
 
 with profile_col:
-    profile_clicked = st.button("A", key="mobile_profile_button", help="Profile")
-
-if "mobile_sidebar_open" not in st.session_state:
-    st.session_state.mobile_sidebar_open = False
+    profile_clicked = st.button("A", key="mobile_profile_button")
 
 if menu_clicked:
     st.session_state.mobile_sidebar_open = not st.session_state.mobile_sidebar_open
     st.rerun()
 
-# সাইডবার প্যানেল
 if st.session_state.mobile_sidebar_open:
     with st.sidebar:
         st.markdown("### ✦ Anis AI Menu")
@@ -204,7 +168,7 @@ if st.session_state.mobile_sidebar_open:
 
 
 # =========================================================
-# HOME SCREEN (যখন কোনো চ্যাট শুরু হয়নি)
+# HOME SCREEN (যখন চ্যাট খালি থাকে)
 # =========================================================
 
 if not st.session_state.messages:
@@ -221,30 +185,25 @@ if not st.session_state.messages:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("📝 Create MCQ", use_container_width=True):
-            st.session_state.active_mode = "mcq"
             st.session_state.messages.append({"role": "user", "content": "I want to create MCQs."})
             st.rerun()
         if st.button("🔍 Analyze", use_container_width=True):
-            st.session_state.active_mode = "analyze"
             st.session_state.messages.append({"role": "user", "content": "I want to analyze something."})
             st.rerun()
     with col2:
         if st.button("📚 Help Me Learn", use_container_width=True):
-            st.session_state.active_mode = "learn"
             st.session_state.messages.append({"role": "user", "content": "Help me learn."})
             st.rerun()
         if st.button("🖼️ Create Image", use_container_width=True):
-            st.session_state.active_mode = "image"
             st.session_state.messages.append({"role": "user", "content": "I want to create an image."})
             st.rerun()
 
 
 # =========================================================
-# CHAT MESSAGES DISPLAY SCREEN
+# CHAT MESSAGES DISPLAY
 # =========================================================
 
 if st.session_state.messages:
-    st.markdown('<div class="anis-chat-screen">', unsafe_allow_html=True)
     for message in st.session_state.messages:
         role = message.get("role", "assistant")
         content = message.get("content", "")
@@ -261,26 +220,24 @@ if st.session_state.messages:
                 """,
                 unsafe_allow_html=True,
             )
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # =========================================================
-# CHAT INPUT & HELPERS PROCESSING
+# CHAT INPUT & PROCESSING
 # =========================================================
 
 user_input = st.chat_input("Ask Anis AI...")
 
 if user_input:
-    # ১. ইউজারের মেসেজ যোগ করা
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # ২. মেমোরি এবং কনটেক্সট ম্যানেজ করা (helpers.py ফাংশন)
+    # মেমোরি ও কনটেক্সট প্রসেসিং
     try:
         conversation_context = manage_conversation_memory(st.session_state.messages)
     except Exception:
         conversation_context = st.session_state.messages
 
-    # ৩. ওয়েব সার্চের প্রয়োজন আছে কিনা দেখা (helpers.py ফাংশন)
+    # ওয়েব সার্চ চেক
     try:
         should_search = needs_web_search(user_input)
     except Exception:
@@ -293,7 +250,7 @@ if user_input:
         except Exception:
             search_results = None
 
-    # ৪. টাস্ক অনুযায়ী মডেল সিলেক্ট করা (helpers.py ফাংশন)
+    # মডেল সিলেকশন
     try:
         selected_model = select_model_by_task(user_input)
     except Exception:
@@ -303,33 +260,27 @@ if user_input:
     if search_results:
         ai_prompt += f"\n\nRelevant web information:\n{search_results}"
 
-    # ৫. এআই ফলব্যাক সিস্টেম কল করা (helpers.py ফাংশন)
+    # এআই রেসপন্স ফলব্যাক কল
     try:
         ai_response = provider_aware_ai_fallback(
             prompt=ai_prompt,
             model=selected_model,
             conversation=conversation_context
         )
-    except TypeError:
-        try:
-            ai_response = provider_aware_ai_fallback(ai_prompt)
-        except Exception:
-            ai_response = "দুঃখিত, এই মুহূর্তে Anis AI প্রসেস করতে পারছে না।"
     except Exception:
-        ai_response = "দুঃখিত, কোনো একটি সমস্যা হয়েছে।"
+        ai_response = "দুঃখিত, এই মুহূর্তে Anis AI প্রসেস করতে পারছে না।"
 
     if not ai_response:
         ai_response = "দুঃখিত, কোনো উত্তর পাওয়া যায়নি।"
     elif not isinstance(ai_response, str):
         ai_response = str(ai_response)
 
-    # ৬. এআই এর উত্তর সেভ করা
     st.session_state.messages.append({"role": "assistant", "content": ai_response})
 
-    # ৭. ইউজেজ লগ করা
     try:
         log_usage("chat")
     except Exception:
         pass
 
     st.rerun()
+    
