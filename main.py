@@ -25,7 +25,42 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# =========================================================
+# SESSION STATE INITIALIZATION
+# =========================================================
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+if "chat_summary" not in st.session_state:
+    st.session_state.chat_summary = ""
+
+if "selected_file" not in st.session_state:
+    st.session_state.selected_file = None
+
+if "attach_mode" not in st.session_state:
+    st.session_state.attach_mode = None
+
+if "show_attach_menu" not in st.session_state:
+    st.session_state.show_attach_menu = False
+
+if "processing" not in st.session_state:
+    st.session_state.processing = False
+
+if "active_mode" not in st.session_state:
+    st.session_state.active_mode = None
+
+if "attached_image" not in st.session_state:
+    st.session_state.attached_image = None
+
+if "pending_user_message" not in st.session_state:
+    st.session_state.pending_user_message = None
+
+if "account_email" not in st.session_state:
+    st.session_state.account_email = None
 # =========================================================
 # ANIS AI — MOBILE APP STYLE
 # =========================================================
