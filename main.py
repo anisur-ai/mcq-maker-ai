@@ -1,6 +1,7 @@
 import os
 import re
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Safe import for dotenv: Environment variable loader
 try:
@@ -22,7 +23,7 @@ from helpers import (
 )
 
 # =====================================================
-# PAGE CONFIGURATION (DARK & PROFESSIONAL)
+# PAGE CONFIGURATION (DARK & FULLSCREEN)
 # =====================================================
 st.set_page_config(
     page_title="Anis AI",
@@ -32,36 +33,151 @@ st.set_page_config(
 )
 
 # =====================================================
-# PURE DARK MODE + 3D DEPTH CUSTOM CSS
+# 3D ANIMATED CANVAS BACKGROUND INJECTION (JS/CANVAS)
+# =====================================================
+THREE_D_BACKGROUND = """
+<div id="canvas-container" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; overflow: hidden; background: #08090d;">
+    <canvas id="bg3d"></canvas>
+</div>
+<script>
+(function() {
+    const canvas = document.getElementById('bg3d');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let particles = [];
+    const numParticles = 65;
+    let angleX = 0.001;
+    let angleY = 0.002;
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 3D Particle Generator (Spherical Distribution)
+    for (let i = 0; i < numParticles; i++) {
+        let theta = Math.random() * Math.PI * 2;
+        let phi = Math.acos((Math.random() * 2) - 1);
+        let radius = 280 + Math.random() * 140;
+
+        particles.push({
+            x: radius * Math.sin(phi) * Math.cos(theta),
+            y: radius * Math.sin(phi) * Math.sin(theta),
+            z: radius * Math.cos(phi),
+            size: Math.random() * 2.5 + 1.2,
+            color: ['#4285f4', '#9b72cf', '#d96570', '#38bdf8'][Math.floor(Math.random() * 4)]
+        });
+    }
+
+    function rotateX(p, angle) {
+        let cos = Math.cos(angle);
+        let sin = Math.sin(angle);
+        let y = p.y * cos - p.z * sin;
+        let z = p.y * sin + p.z * cos;
+        p.y = y;
+        p.z = z;
+    }
+
+    function rotateY(p, angle) {
+        let cos = Math.cos(angle);
+        let sin = Math.sin(angle);
+        let x = p.x * cos + p.z * sin;
+        let z = -p.x * sin + p.z * cos;
+        p.x = x;
+        p.z = z;
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, width, height);
+
+        let cx = width / 2;
+        let cy = height / 2;
+        let fov = 450;
+
+        let projected = [];
+
+        for (let i = 0; i < particles.length; i++) {
+            let p = particles[i];
+            rotateX(p, angleX);
+            rotateY(p, angleY);
+
+            let scale = fov / (fov + p.z + 300);
+            let px = p.x * scale + cx;
+            let py = p.y * scale + cy;
+
+            projected.push({ x: px, y: py, scale: scale, p: p });
+        }
+
+        // Draw 3D Connecting Lines
+        for (let i = 0; i < projected.length; i++) {
+            for (let j = i + 1; j < projected.length; j++) {
+                let p1 = projected[i];
+                let p2 = projected[j];
+                let dx = p1.x - p2.x;
+                let dy = p1.y - p2.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 130) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    let alpha = (1 - dist / 130) * 0.15 * p1.scale;
+                    ctx.strokeStyle = `rgba(155, 114, 207, ${alpha})`;
+                    ctx.lineWidth = 0.9;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Draw Nodes
+        for (let i = 0; i < projected.length; i++) {
+            let item = projected[i];
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, item.p.size * item.scale, 0, Math.PI * 2);
+            ctx.fillStyle = item.p.color;
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = item.p.color;
+            ctx.globalAlpha = Math.min(Math.max(item.scale * 0.9, 0.2), 1);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+
+        requestAnimationFrame(draw);
+    }
+    draw();
+})();
+</script>
+"""
+components.html(THREE_D_BACKGROUND, height=0, width=0)
+
+# =====================================================
+# CUSTOM CSS: ULTRA MODERN 3D DARK THEME
 # =====================================================
 ANIS_AI_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-/* Main HTML & Base */
 html, body, [class*="css"] {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     color: #e6edf3;
 }
 
-/* 3D Modern Obsidian Background with Radial Ambient Glows */
+/* Make App Body Transparent so 3D Canvas shines through */
 .stApp {
-    background-color: #090a0f;
-    background-image: 
-        radial-gradient(at 0% 0%, rgba(66, 133, 244, 0.12) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(155, 114, 207, 0.10) 0px, transparent 50%),
-        radial-gradient(at 50% 100%, rgba(217, 101, 112, 0.08) 0px, transparent 60%);
-    background-attachment: fixed;
-    color: #e6edf3;
+    background: transparent !important;
 }
 
-/* Sidebar with 3D Glassmorphism */
+/* Sidebar with 3D Frosted Glass Effect */
 [data-testid="stSidebar"] {
-    background: rgba(14, 16, 22, 0.85) !important;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgba(12, 14, 20, 0.75) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+    box-shadow: 10px 0 35px rgba(0, 0, 0, 0.6);
 }
 
 [data-testid="stSidebar"] hr {
@@ -72,17 +188,17 @@ header[data-testid="stHeader"] {
     background: transparent;
 }
 
-/* Anis AI 3D Gradient Heading */
+/* Anis AI 3D Heading */
 .anis-title {
-    font-size: 3.4rem;
-    font-weight: 700;
+    font-size: 3.5rem;
+    font-weight: 800;
     letter-spacing: -0.03em;
-    background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%);
+    background: linear-gradient(135deg, #60a5fa 0%, #c084fc 45%, #f472b6 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.2rem;
     line-height: 1.2;
-    text-shadow: 0 10px 30px rgba(96, 165, 250, 0.2);
+    filter: drop-shadow(0 6px 20px rgba(96, 165, 250, 0.3));
 }
 
 .anis-subtitle {
@@ -96,51 +212,44 @@ header[data-testid="stHeader"] {
 [data-testid="stChatMessage"] {
     background-color: transparent;
     border: none;
-    padding: 1rem 0;
+    padding: 0.9rem 0;
 }
 
-/* User Message Bubble */
+/* User Message Pill */
 [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-    background: linear-gradient(135deg, #1e2433 0%, #171b26 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(135deg, rgba(30, 36, 51, 0.85) 0%, rgba(23, 27, 38, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
     border-radius: 20px 20px 4px 20px;
-    padding: 14px 20px;
+    padding: 14px 22px;
     margin: 8px 0 16px auto;
     max-width: 80%;
     width: fit-content;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 /* Assistant Message */
 [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
-    background-color: transparent;
+    background: transparent;
     padding-left: 0;
 }
 
-/* 3D Elevated Input Box */
+/* Chat Input Bar */
 [data-testid="stChatInput"] {
-    background: rgba(18, 20, 29, 0.9) !important;
+    background: rgba(18, 20, 29, 0.85) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    border-radius: 24px !important;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.6) !important;
+    border-radius: 26px !important;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6) !important;
 }
 
 [data-testid="stChatInput"]:focus-within {
     border-color: #60a5fa !important;
-    box-shadow: 0 10px 40px rgba(96, 165, 250, 0.25) !important;
+    box-shadow: 0 10px 40px rgba(96, 165, 250, 0.3) !important;
 }
 
 [data-testid="stChatInput"] textarea {
     color: #f1f5f9;
-}
-
-/* Plus File Upload Expander Bar */
-.streamlit-expanderHeader {
-    background-color: #12141d !important;
-    border-radius: 12px !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    color: #94a3b8 !important;
 }
 
 /* History items in Sidebar */
@@ -148,34 +257,37 @@ header[data-testid="stHeader"] {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 10px;
-    padding: 8px 12px;
-    margin-bottom: 6px;
+    padding: 9px 12px;
+    margin-bottom: 7px;
     font-size: 0.88rem;
     color: #cbd5e1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: all 0.2s ease;
 }
 .history-item:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(96, 165, 250, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(96, 165, 250, 0.35);
+    transform: translateX(3px);
 }
 
 /* Buttons */
 .stButton > button {
-    background: linear-gradient(135deg, #1e2230 0%, #151821 100%);
+    background: linear-gradient(135deg, rgba(30, 34, 48, 0.8) 0%, rgba(21, 24, 33, 0.8) 100%);
     color: #e2e8f0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 14px;
     font-weight: 500;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px);
 }
 
 .stButton > button:hover {
     border-color: #60a5fa;
     color: #ffffff;
-    box-shadow: 0 6px 20px rgba(96, 165, 250, 0.2);
+    box-shadow: 0 6px 22px rgba(96, 165, 250, 0.25);
+    transform: translateY(-1px);
 }
 </style>
 """
@@ -204,7 +316,7 @@ def get_key(key_name: str) -> str:
     return os.getenv(key_name, "").strip()
 
 
-# Load Keys Silently
+# Load API Keys Silently
 keys_dict = {
     "gemini": get_key("GEMINI_API_KEY"),
     "groq": get_key("GROQ_API_KEY"),
@@ -227,27 +339,28 @@ if "messages" not in st.session_state:
 
 
 # =====================================================
-# SIDEBAR: CHAT HISTORY ONLY
+# SIDEBAR: CHAT HISTORY (CLEAN ENGLISH UI)
 # =====================================================
 with st.sidebar:
-    st.markdown("### 💬 **চ্যাট হিস্টরি**")
+    st.markdown("### 💬 **Chat History**")
     
-    if st.button("➕ নতুন চ্যাট (New Chat)", use_container_width=True):
+    if st.button("➕ New Chat", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.pop("attached_file", None)
         st.rerun()
 
     st.markdown("---")
 
-    # Display list of past user questions
+    # Display past conversation queries
     user_queries = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
     if user_queries:
-        for idx, query in enumerate(reversed(user_queries[-15:]), 1):
+        for query in reversed(user_queries[-15:]):
             st.markdown(f'<div class="history-item">💭 {query}</div>', unsafe_allow_html=True)
     else:
-        st.caption("এখনো কোনো কথোপকথন শুরু হয়নি।")
+        st.caption("No conversations yet.")
 
     st.markdown("---")
-    force_web_search = st.checkbox("🌐 সর্বদা লাইভ সার্চ করুন", value=False)
+    force_web_search = st.checkbox("🌐 Always Search Live Web", value=False)
 
 
 # =====================================================
@@ -255,7 +368,7 @@ with st.sidebar:
 # =====================================================
 if not st.session_state.messages:
     st.markdown('<div class="anis-title">Anis AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="anis-subtitle">Hello! How can I assist you today?</div>', unsafe_allow_html=True)
+    st.markdown('<div class="anis-subtitle">Hello, Explorer! How can I help you today?</div>', unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -270,7 +383,7 @@ if not st.session_state.messages:
             st.session_state.temp_prompt = "Write a high-performance Python script to parse large JSON files concurrently."
     with col4:
         if st.button("📄 Document QA\nExtract key insights from files", use_container_width=True):
-            st.session_state.temp_prompt = "Summarize the key points of the uploaded document in clear bullet points."
+            st.session_state.temp_prompt = "Summarize the key points of the uploaded file in clear bullet points."
 
 
 # =====================================================
@@ -286,32 +399,57 @@ for msg in st.session_state.messages:
 
 
 # =====================================================
-# PLUS (+) FILE UPLOADER UNDER CHAT AREA
+# ATTACHMENT BAR (PLUS POPOVER NEXT TO CHAT)
 # =====================================================
-with st.expander("➕ ফাইল বা ছবি যুক্ত করুন (PDF, DOCX, TXT, Images)", expanded=False):
-    uploaded_file = st.file_uploader(
-        "ফাইল আপলোড করুন",
-        type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
-        label_visibility="collapsed",
-        key="file_uploader",
-    )
+action_col1, action_col2 = st.columns([1.2, 8.8])
+
+uploaded_file = None
+quick_send_trigger = False
+
+with action_col1:
+    with st.popover("➕ Attach", use_container_width=True):
+        st.markdown("**Upload Document or Image**")
+        uploaded_file = st.file_uploader(
+            "Upload file",
+            type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
+            label_visibility="collapsed",
+            key="file_uploader",
+        )
+        if uploaded_file is not None:
+            st.success(f"📎 {uploaded_file.name}")
+            if st.button("🚀 Analyze / Send File", use_container_width=True):
+                quick_send_trigger = True
+
+with action_col2:
+    if uploaded_file is not None:
+        st.caption(f"📎 Ready to send: **{uploaded_file.name}** (Type prompt below or click 'Analyze / Send File')")
 
 
 # =====================================================
 # PROCESS USER INTERACTION
 # =====================================================
 temp_prompt = st.session_state.pop("temp_prompt", None)
-user_prompt = st.chat_input("Ask Anis AI or type a prompt...") or temp_prompt
+typed_prompt = st.chat_input("Ask Anis AI or type a prompt...")
+
+# Determine active prompt
+user_prompt = None
+if quick_send_trigger:
+    user_prompt = f"Please analyze and explain the uploaded file: {uploaded_file.name}"
+elif typed_prompt:
+    user_prompt = typed_prompt
+elif temp_prompt:
+    user_prompt = temp_prompt
+
 
 if user_prompt:
     # 1. Show user message
     st.chat_message("user", avatar="👤").markdown(user_prompt)
     st.session_state.messages.append({"role": "user", "content": user_prompt})
 
-    # 2. Extract Document Data
+    # 2. Extract Document / Image Data
     file_context = ""
     if uploaded_file is not None:
-        with st.spinner("✨ Anis AI ফাইলটি বিশ্লেষণ করছে..."):
+        with st.spinner("✨ Anis AI is reading your file/image..."):
             file_context = smart_read_file(uploaded_file, ocr_api_key=ocr_key)
 
     # 3. Web Search & Scraping
@@ -319,7 +457,7 @@ if user_prompt:
     sources_list = []
     urls_in_prompt = re.findall(URL_REGEX, user_prompt)
 
-    with st.spinner("✨ Anis AI তথ্য অনুসন্ধান করছে..."):
+    with st.spinner("✨ Anis AI is researching..."):
         if urls_in_prompt:
             target_url = urls_in_prompt[0]
             scraped_content, scraped_sources = smart_scrape(
@@ -372,7 +510,7 @@ if user_prompt:
             full_response += chunk
             response_container.markdown(full_response + " ▌")
 
-        # ইউজার-ফ্রেন্ডলি মেসেজ
+        # Fallback polite error message
         if has_failed:
             polite_message = "Sorry, please wait a moment. The problem is being fixed."
             response_container.info(f"✨ {polite_message}")
