@@ -127,7 +127,7 @@ header[data-testid="stHeader"] {
     padding-left: 0;
 }
 
-/* Rounded Input Bar */
+/* Rounded Input Bar & Action Buttons */
 [data-testid="stChatInput"] {
     background-color: #1e1f20;
     border: 1px solid #333538;
@@ -144,6 +144,12 @@ header[data-testid="stHeader"] {
 [data-testid="stChatInput"] textarea {
     color: #e3e3e3;
     font-size: 0.98rem;
+}
+
+/* Attachment button & Send button inside input */
+[data-testid="stChatInput"] button {
+    border-radius: 50% !important;
+    transition: background-color 0.2s ease;
 }
 
 /* Button UI */
@@ -211,14 +217,7 @@ with st.sidebar:
         st.text_input("OCR.space API Key", value=get_key("OCR_API_KEY"), type="password", key="OCR_API_KEY")
 
     st.markdown("---")
-    st.markdown("### 📎 Context & Files")
-    uploaded_file = st.file_uploader(
-        "Upload PDF, DOCX, TXT, or Image",
-        type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
-        label_visibility="collapsed",
-        key="file_uploader",
-    )
-
+    st.markdown("### ⚙️ **Chat Options**")
     force_web_search = st.checkbox("Always Search Google Live", value=False)
 
     if st.button("🗑️ Reset Chat", use_container_width=True):
@@ -282,15 +281,50 @@ for msg in st.session_state.messages:
 
 
 # =====================================================
-# PROCESS USER INTERACTION
+# PROCESS USER INTERACTION (+ ICON FILE UPLOADER)
 # =====================================================
 temp_prompt = st.session_state.pop("temp_prompt", None)
-user_prompt = st.chat_input("Ask Anis Ai or type a prompt...") or temp_prompt
 
-if user_prompt:
-    # 1. Show user message
-    st.chat_message("user", avatar="👤").markdown(user_prompt)
-    st.session_state.messages.append({"role": "user", "content": user_prompt})
+# st.chat_input with accept_file adds the '+' file upload button beside the text box
+chat_input_val = st.chat_input(
+    "Ask Gemini AI or attach a file...",
+    accept_file=True,
+    file_type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
+)
+
+user_prompt = None
+uploaded_file = None
+
+if chat_input_val:
+    if hasattr(chat_input_val, "text"):
+        user_prompt = chat_input_val.text
+        if hasattr(chat_input_val, "files") and chat_input_val.files:
+            uploaded_file = chat_input_val.files[0]
+    elif isinstance(chat_input_val, dict):
+        user_prompt = chat_input_val.get("text", "")
+        files = chat_input_val.get("files", [])
+        if files:
+            uploaded_file = files[0]
+    else:
+        user_prompt = str(chat_input_val)
+elif temp_prompt:
+    user_prompt = temp_prompt
+
+if user_prompt or uploaded_file:
+    # If the user only attached a file without entering text
+    if not user_prompt:
+        user_prompt = f"Please analyze and summarize the attached file: {uploaded_file.name}"
+
+    # 1. Show user message with file attachment pill if present
+    with st.chat_message("user", avatar="👤"):
+        if uploaded_file is not None:
+            st.caption(f"📎 Attached: **{uploaded_file.name}**")
+        st.markdown(user_prompt)
+
+    display_message = user_prompt
+    if uploaded_file is not None:
+        display_message = f"📎 *Attached file: {uploaded_file.name}*\n\n{user_prompt}"
+    st.session_state.messages.append({"role": "user", "content": display_message})
 
     # 2. Extract Document Data
     file_context = ""
@@ -362,7 +396,6 @@ if user_prompt:
             full_response += chunk
             response_container.markdown(full_response + " ▌")
 
-        # ইউজার-ফ্রেন্ডলি বিনম্র মেসেজ
         if has_failed:
             polite_message = "Sorry, please wait a moment. The problem is being fixed."
             response_container.info(f"✨ {polite_message}")
