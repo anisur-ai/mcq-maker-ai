@@ -22,103 +22,93 @@ from helpers import (
 )
 
 # =====================================================
-# PAGE CONFIGURATION
+# PAGE CONFIGURATION (DARK & PROFESSIONAL)
 # =====================================================
 st.set_page_config(
-    page_title="Gemini AI",
+    page_title="Anis AI",
     page_icon="✨",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # =====================================================
-# GEMINI UI - CUSTOM CSS
+# PURE DARK MODE + 3D DEPTH CUSTOM CSS
 # =====================================================
-GEMINI_CSS = """
+ANIS_AI_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
+/* Main HTML & Base */
 html, body, [class*="css"] {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    color: #e3e3e3;
+    color: #e6edf3;
 }
 
-/* Gemini Dark Background */
+/* 3D Modern Obsidian Background with Radial Ambient Glows */
 .stApp {
-    background-color: #131314;
-    color: #e3e3e3;
+    background-color: #090a0f;
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(66, 133, 244, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(155, 114, 207, 0.10) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(217, 101, 112, 0.08) 0px, transparent 60%);
+    background-attachment: fixed;
+    color: #e6edf3;
 }
 
-/* Sidebar styling */
+/* Sidebar with 3D Glassmorphism */
 [data-testid="stSidebar"] {
-    background-color: #1e1f20 !important;
-    border-right: 1px solid #2d2f31;
+    background: rgba(14, 16, 22, 0.85) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
 }
 
 [data-testid="stSidebar"] hr {
-    border-color: #2d2f31;
+    border-color: rgba(255, 255, 255, 0.08);
 }
 
 header[data-testid="stHeader"] {
     background: transparent;
 }
 
-/* Gemini Gradient Heading */
-.gemini-title {
-    font-size: 3.2rem;
+/* Anis AI 3D Gradient Heading */
+.anis-title {
+    font-size: 3.4rem;
     font-weight: 700;
-    letter-spacing: -0.02em;
-    background: linear-gradient(74deg, #4285f4 0%, #9b72cf 35%, #d96570 70%, #d96570 100%);
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.2rem;
     line-height: 1.2;
+    text-shadow: 0 10px 30px rgba(96, 165, 250, 0.2);
 }
 
-.gemini-subtitle {
-    font-size: 1.4rem;
-    font-weight: 500;
-    color: #c4c7c5;
+.anis-subtitle {
+    font-size: 1.3rem;
+    font-weight: 400;
+    color: #94a3b8;
     margin-bottom: 2rem;
-}
-
-/* Gemini Badge Pill */
-.gemini-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #1e1f20;
-    border: 1px solid #333538;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    color: #c4c7c5;
-    font-weight: 500;
-    margin-bottom: 12px;
-}
-
-.gemini-sparkle {
-    background: linear-gradient(74deg, #4285f4, #9b72cf, #d96570);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-size: 0.95rem;
 }
 
 /* Chat Messages */
 [data-testid="stChatMessage"] {
     background-color: transparent;
     border: none;
-    padding: 1.2rem 0;
+    padding: 1rem 0;
 }
 
-/* User Message Pill */
+/* User Message Bubble */
 [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-    background-color: #282a2c;
-    border-radius: 24px;
+    background: linear-gradient(135deg, #1e2433 0%, #171b26 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px 20px 4px 20px;
     padding: 14px 20px;
     margin: 8px 0 16px auto;
     max-width: 80%;
     width: fit-content;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* Assistant Message */
@@ -127,56 +117,75 @@ header[data-testid="stHeader"] {
     padding-left: 0;
 }
 
-/* Rounded Input Bar & Action Buttons */
+/* 3D Elevated Input Box */
 [data-testid="stChatInput"] {
-    background-color: #1e1f20;
-    border: 1px solid #333538;
-    border-radius: 28px;
-    padding: 4px 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    background: rgba(18, 20, 29, 0.9) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 24px !important;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.6) !important;
 }
 
 [data-testid="stChatInput"]:focus-within {
-    border-color: #4285f4;
-    box-shadow: 0 4px 24px rgba(66, 133, 244, 0.2);
+    border-color: #60a5fa !important;
+    box-shadow: 0 10px 40px rgba(96, 165, 250, 0.25) !important;
 }
 
 [data-testid="stChatInput"] textarea {
-    color: #e3e3e3;
-    font-size: 0.98rem;
+    color: #f1f5f9;
 }
 
-/* Attachment button & Send button inside input */
-[data-testid="stChatInput"] button {
-    border-radius: 50% !important;
-    transition: background-color 0.2s ease;
+/* Plus File Upload Expander Bar */
+.streamlit-expanderHeader {
+    background-color: #12141d !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #94a3b8 !important;
 }
 
-/* Button UI */
+/* History items in Sidebar */
+.history-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    font-size: 0.88rem;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.history-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(96, 165, 250, 0.3);
+}
+
+/* Buttons */
 .stButton > button {
-    background-color: #1e1f20;
-    color: #e3e3e3;
-    border: 1px solid #333538;
-    border-radius: 20px;
-    padding: 6px 18px;
+    background: linear-gradient(135deg, #1e2230 0%, #151821 100%);
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
     font-weight: 500;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .stButton > button:hover {
-    background-color: #2d2f31;
-    border-color: #55575a;
+    border-color: #60a5fa;
     color: #ffffff;
+    box-shadow: 0 6px 20px rgba(96, 165, 250, 0.2);
 }
 </style>
 """
-st.markdown(GEMINI_CSS, unsafe_allow_html=True)
+st.markdown(ANIS_AI_CSS, unsafe_allow_html=True)
 
 # =====================================================
 # CONSTANTS & UTILITIES
 # =====================================================
 DEFAULT_SYSTEM_PROMPT = (
-    "You are Gemini, a helpful, highly knowledgeable, and polite AI assistant built by Google. "
+    "You are Anis AI, a helpful, highly knowledgeable, polite, and advanced AI assistant. "
     "Format all answers with clean Markdown, bullet points, and code blocks where appropriate. "
     "Use any provided document context or web search results precisely."
 )
@@ -184,9 +193,7 @@ DEFAULT_SYSTEM_PROMPT = (
 URL_REGEX = r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[^\s]*"
 
 def get_key(key_name: str) -> str:
-    """
-    Fetch API keys securely from Session State, Streamlit Secrets, or OS Environment.
-    """
+    """Fetch API keys securely from Session State, Streamlit Secrets, or OS Environment."""
     if st.session_state.get(key_name):
         return st.session_state[key_name].strip()
     try:
@@ -197,40 +204,7 @@ def get_key(key_name: str) -> str:
     return os.getenv(key_name, "").strip()
 
 
-# =====================================================
-# SIDEBAR DRAWER (SETTINGS & KEYS)
-# =====================================================
-with st.sidebar:
-    st.markdown("### ✨ **Gemini Settings**")
-    
-    with st.expander("🔑 AI Provider Keys", expanded=False):
-        st.text_input("Gemini API Key", value=get_key("GEMINI_API_KEY"), type="password", key="GEMINI_API_KEY")
-        st.text_input("Groq API Key", value=get_key("GROQ_API_KEY"), type="password", key="GROQ_API_KEY")
-        st.text_input("Mistral API Key", value=get_key("MISTRAL_API_KEY"), type="password", key="MISTRAL_API_KEY")
-        st.text_input("OpenRouter API Key", value=get_key("OPENROUTER_API_KEY"), type="password", key="OPENROUTER_API_KEY")
-
-    with st.expander("🌐 Web Search & OCR Tools", expanded=False):
-        st.text_input("Serper API Key (Google Search)", value=get_key("SERPER_API_KEY"), type="password", key="SERPER_API_KEY")
-        st.text_input("Tavily API Key", value=get_key("TAVILY_API_KEY"), type="password", key="TAVILY_API_KEY")
-        st.text_input("Jina API Key", value=get_key("JINA_API_KEY"), type="password", key="JINA_API_KEY")
-        st.text_input("Firecrawl API Key", value=get_key("FIRECRAWL_API_KEY"), type="password", key="FIRECRAWL_API_KEY")
-        st.text_input("OCR.space API Key", value=get_key("OCR_API_KEY"), type="password", key="OCR_API_KEY")
-
-    st.markdown("---")
-    st.markdown("### ⚙️ **Chat Options**")
-    force_web_search = st.checkbox("Always Search Google Live", value=False)
-
-    if st.button("🗑️ Reset Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-
-# =====================================================
-# SESSION STATE & ACTIVE KEYS
-# =====================================================
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
+# Load Keys Silently
 keys_dict = {
     "gemini": get_key("GEMINI_API_KEY"),
     "groq": get_key("GROQ_API_KEY"),
@@ -246,16 +220,47 @@ ocr_key = get_key("OCR_API_KEY")
 
 
 # =====================================================
-# GEMINI HERO SCREEN (ON FRESH START)
+# SESSION STATE INITIALIZATION
+# =====================================================
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+
+# =====================================================
+# SIDEBAR: CHAT HISTORY ONLY
+# =====================================================
+with st.sidebar:
+    st.markdown("### 💬 **চ্যাট হিস্টরি**")
+    
+    if st.button("➕ নতুন চ্যাট (New Chat)", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+    st.markdown("---")
+
+    # Display list of past user questions
+    user_queries = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
+    if user_queries:
+        for idx, query in enumerate(reversed(user_queries[-15:]), 1):
+            st.markdown(f'<div class="history-item">💭 {query}</div>', unsafe_allow_html=True)
+    else:
+        st.caption("এখনো কোনো কথোপকথন শুরু হয়নি।")
+
+    st.markdown("---")
+    force_web_search = st.checkbox("🌐 সর্বদা লাইভ সার্চ করুন", value=False)
+
+
+# =====================================================
+# ANIS AI HERO SCREEN (ON FRESH START)
 # =====================================================
 if not st.session_state.messages:
-    st.markdown('<div class="gemini-title">Hello, Explorer</div>', unsafe_allow_html=True)
-    st.markdown('<div class="gemini-subtitle">How can I assist you today?</div>', unsafe_allow_html=True)
+    st.markdown('<div class="anis-title">Anis AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="anis-subtitle">Hello! How can I assist you today?</div>', unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("📝 Create Quiz\nGenerate questions with explanations", use_container_width=True):
+        if st.button("📝 Create Quiz\nGenerate questions with answers", use_container_width=True):
             st.session_state.temp_prompt = "Create a 5-question multiple choice quiz on artificial intelligence with answer keys and explanations."
     with col2:
         if st.button("🔍 Live Search\nGet real-time updates from web", use_container_width=True):
@@ -281,55 +286,32 @@ for msg in st.session_state.messages:
 
 
 # =====================================================
-# PROCESS USER INTERACTION (+ ICON FILE UPLOADER)
+# PLUS (+) FILE UPLOADER UNDER CHAT AREA
+# =====================================================
+with st.expander("➕ ফাইল বা ছবি যুক্ত করুন (PDF, DOCX, TXT, Images)", expanded=False):
+    uploaded_file = st.file_uploader(
+        "ফাইল আপলোড করুন",
+        type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
+        label_visibility="collapsed",
+        key="file_uploader",
+    )
+
+
+# =====================================================
+# PROCESS USER INTERACTION
 # =====================================================
 temp_prompt = st.session_state.pop("temp_prompt", None)
+user_prompt = st.chat_input("Ask Anis AI or type a prompt...") or temp_prompt
 
-# st.chat_input with accept_file adds the '+' file upload button beside the text box
-chat_input_val = st.chat_input(
-    "Ask Gemini AI or attach a file...",
-    accept_file=True,
-    file_type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "webp"],
-)
-
-user_prompt = None
-uploaded_file = None
-
-if chat_input_val:
-    if hasattr(chat_input_val, "text"):
-        user_prompt = chat_input_val.text
-        if hasattr(chat_input_val, "files") and chat_input_val.files:
-            uploaded_file = chat_input_val.files[0]
-    elif isinstance(chat_input_val, dict):
-        user_prompt = chat_input_val.get("text", "")
-        files = chat_input_val.get("files", [])
-        if files:
-            uploaded_file = files[0]
-    else:
-        user_prompt = str(chat_input_val)
-elif temp_prompt:
-    user_prompt = temp_prompt
-
-if user_prompt or uploaded_file:
-    # If the user only attached a file without entering text
-    if not user_prompt:
-        user_prompt = f"Please analyze and summarize the attached file: {uploaded_file.name}"
-
-    # 1. Show user message with file attachment pill if present
-    with st.chat_message("user", avatar="👤"):
-        if uploaded_file is not None:
-            st.caption(f"📎 Attached: **{uploaded_file.name}**")
-        st.markdown(user_prompt)
-
-    display_message = user_prompt
-    if uploaded_file is not None:
-        display_message = f"📎 *Attached file: {uploaded_file.name}*\n\n{user_prompt}"
-    st.session_state.messages.append({"role": "user", "content": display_message})
+if user_prompt:
+    # 1. Show user message
+    st.chat_message("user", avatar="👤").markdown(user_prompt)
+    st.session_state.messages.append({"role": "user", "content": user_prompt})
 
     # 2. Extract Document Data
     file_context = ""
     if uploaded_file is not None:
-        with st.spinner("✨ Gemini is reading your document..."):
+        with st.spinner("✨ Anis AI ফাইলটি বিশ্লেষণ করছে..."):
             file_context = smart_read_file(uploaded_file, ocr_api_key=ocr_key)
 
     # 3. Web Search & Scraping
@@ -337,7 +319,7 @@ if user_prompt or uploaded_file:
     sources_list = []
     urls_in_prompt = re.findall(URL_REGEX, user_prompt)
 
-    with st.spinner("✨ Gemini is searching and analyzing..."):
+    with st.spinner("✨ Anis AI তথ্য অনুসন্ধান করছে..."):
         if urls_in_prompt:
             target_url = urls_in_prompt[0]
             scraped_content, scraped_sources = smart_scrape(
@@ -358,7 +340,7 @@ if user_prompt or uploaded_file:
             external_context += search_content
             sources_list.extend(search_sources)
 
-    # 4. Automatic Model Selection
+    # 4. Automatic Model Selection (Internal Routing)
     combined_context = f"{file_context}\n{external_context}"
     router_info = select_model_by_task(user_prompt, context_text=combined_context)
 
@@ -371,14 +353,8 @@ if user_prompt or uploaded_file:
         external_context=external_context,
     )
 
-    # 6. Stream Assistant Response
+    # 6. Stream Assistant Response (NO API BADGE)
     with st.chat_message("assistant", avatar="✨"):
-        # Model Badge
-        st.markdown(
-            f'<div class="gemini-badge"><span class="gemini-sparkle">✦</span> Powered by <b>{router_info["provider"].title()}</b> ({router_info["model"]})</div>',
-            unsafe_allow_html=True,
-        )
-
         response_container = st.empty()
         full_response = ""
 
@@ -396,6 +372,7 @@ if user_prompt or uploaded_file:
             full_response += chunk
             response_container.markdown(full_response + " ▌")
 
+        # ইউজার-ফ্রেন্ডলি মেসেজ
         if has_failed:
             polite_message = "Sorry, please wait a moment. The problem is being fixed."
             response_container.info(f"✨ {polite_message}")
@@ -405,5 +382,6 @@ if user_prompt or uploaded_file:
                 full_response += format_sources(sources_list)
             response_container.markdown(full_response)
 
-    # 7. Save Assistant Message to History
+    # 7. Save Assistant Message to History & Refresh Sidebar
     st.session_state.messages.append({"role": "assistant", "content": full_response})
+    st.rerun()
