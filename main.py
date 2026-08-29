@@ -285,7 +285,7 @@ for msg in st.session_state.messages:
 # PROCESS USER INTERACTION
 # =====================================================
 temp_prompt = st.session_state.pop("temp_prompt", None)
-user_prompt = st.chat_input("Ask Gemini or type a prompt...") or temp_prompt
+user_prompt = st.chat_input("Ask Anis Ai or type a prompt...") or temp_prompt
 
 if user_prompt:
     # 1. Show user message
