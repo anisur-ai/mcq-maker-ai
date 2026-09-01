@@ -12,6 +12,7 @@ except ImportError:
     pass
 
 # Import all necessary functions directly from helpers.py
+# (এগুলো কোনোভাবেই পরিবর্তন করা হয়নি, আপনার নির্দেশ অনুযায়ী)
 from helpers import (
     smart_read_file,
     needs_web_search,
@@ -34,137 +35,9 @@ st.set_page_config(
 )
 
 # =====================================================
-# REAL 3D ANIMATED CANVAS (DOM INJECTION)
-# =====================================================
-REAL_3D_BG_INJECTOR = """
-<script>
-(function() {
-    const parentDoc = window.parent.document;
-    if (parentDoc.getElementById('anis-3d-canvas')) return;
-
-    const canvas = parentDoc.createElement('canvas');
-    canvas.id = 'anis-3d-canvas';
-    canvas.style.position = 'fixed';
-    canvas.style.top = '0';
-    canvas.style.left = '0';
-    canvas.style.width = '100vw';
-    canvas.style.height = '100vh';
-    canvas.style.zIndex = '0';
-    canvas.style.pointerEvents = 'none';
-    canvas.style.opacity = '0.75';
-    parentDoc.body.prepend(canvas);
-
-    const ctx = canvas.getContext('2d');
-    let width, height;
-    let particles = [];
-    const numParticles = 70;
-    let angleX = 0.0015;
-    let angleY = 0.0025;
-
-    function resize() {
-        width = window.parent.innerWidth;
-        height = window.parent.innerHeight;
-        canvas.width = width;
-        canvas.height = height;
-    }
-    window.parent.addEventListener('resize', resize);
-    resize();
-
-    // 3D Particles in a sphere cluster
-    for (let i = 0; i < numParticles; i++) {
-        let theta = Math.random() * Math.PI * 2;
-        let phi = Math.acos((Math.random() * 2) - 1);
-        let radius = 260 + Math.random() * 160;
-
-        particles.push({
-            x: radius * Math.sin(phi) * Math.cos(theta),
-            y: radius * Math.sin(phi) * Math.sin(theta),
-            z: radius * Math.cos(phi),
-            size: Math.random() * 2.6 + 1.2,
-            color: ['#4285f4', '#a855f7', '#ec4899', '#38bdf8'][Math.floor(Math.random() * 4)]
-        });
-    }
-
-    function rotateX(p, angle) {
-        let cos = Math.cos(angle);
-        let sin = Math.sin(angle);
-        let y = p.y * cos - p.z * sin;
-        let z = p.y * sin + p.z * cos;
-        p.y = y;
-        p.z = z;
-    }
-
-    function rotateY(p, angle) {
-        let cos = Math.cos(angle);
-        let sin = Math.sin(angle);
-        let x = p.x * cos + p.z * sin;
-        let z = -p.x * sin + p.z * cos;
-        p.x = x;
-        p.z = z;
-    }
-
-    function draw() {
-        ctx.clearRect(0, 0, width, height);
-        let cx = width / 2;
-        let cy = height / 2;
-        let fov = 420;
-        let projected = [];
-
-        for (let i = 0; i < particles.length; i++) {
-            let p = particles[i];
-            rotateX(p, angleX);
-            rotateY(p, angleY);
-
-            let scale = fov / (fov + p.z + 320);
-            let px = p.x * scale + cx;
-            let py = p.y * scale + cy;
-            projected.push({ x: px, y: py, scale: scale, p: p });
-        }
-
-        // Connect 3D vertices
-        for (let i = 0; i < projected.length; i++) {
-            for (let j = i + 1; j < projected.length; j++) {
-                let p1 = projected[i];
-                let p2 = projected[j];
-                let dx = p1.x - p2.x;
-                let dy = p1.y - p2.y;
-                let dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist < 130) {
-                    ctx.beginPath();
-                    ctx.moveTo(p1.x, p1.y);
-                    ctx.lineTo(p2.x, p2.y);
-                    let alpha = (1 - dist / 130) * 0.2 * p1.scale;
-                    ctx.strokeStyle = `rgba(168, 85, 247, ${alpha})`;
-                    ctx.lineWidth = 0.9;
-                    ctx.stroke();
-                }
-            }
-        }
-
-        // Draw 3D nodes
-        for (let i = 0; i < projected.length; i++) {
-            let item = projected[i];
-            ctx.beginPath();
-            ctx.arc(item.x, item.y, item.p.size * item.scale, 0, Math.PI * 2);
-            ctx.fillStyle = item.p.color;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = item.p.color;
-            ctx.globalAlpha = Math.min(Math.max(item.scale * 0.9, 0.25), 1);
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
-        }
-
-        window.requestAnimationFrame(draw);
-    }
-    draw();
-})();
-</script>
-"""
-components.html(REAL_3D_BG_INJECTOR, height=0, width=0)
-
-# =====================================================
-# MODERN 3D OBSIDIAN CSS THEME
+# MODERN 3D OBSIDIAN CSS THEME & GEMINI BACKGROUND
+# (এখানে জেমিনির মতো স্মুথ এবং লাইটওয়েট ব্যাকগ্রাউন্ড দেওয়া হয়েছে 
+# যা লো-এন্ড ফোনে খুব সহজেই সাপোর্ট করবে)
 # =====================================================
 ANIS_AI_CSS = """
 <style>
@@ -175,15 +48,51 @@ html, body, [class*="css"] {
     color: #e6edf3;
 }
 
-/* Ensure background transparency for 3D canvas */
+/* Gemini Style Lightweight Animated Background (No JS Canvas, Lag-Free) */
 .stApp {
     background: #090a0f !important;
     color: #e6edf3;
+    overflow-x: hidden;
+}
+
+/* Gemini Glowing Aura Elements */
+.stApp::before, .stApp::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(90px);
+    z-index: -1;
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.stApp::before {
+    top: -10%; left: -10%;
+    width: 60vw; height: 60vw;
+    background: radial-gradient(circle, rgba(96,165,250,0.6) 0%, transparent 70%);
+    animation: floatGlow1 12s infinite alternate ease-in-out;
+}
+
+.stApp::after {
+    bottom: -10%; right: -10%;
+    width: 70vw; height: 70vw;
+    background: radial-gradient(circle, rgba(168,85,247,0.5) 0%, transparent 70%);
+    animation: floatGlow2 15s infinite alternate-reverse ease-in-out;
+}
+
+/* Floating Animation for Low-End Phones (Hardware Accelerated) */
+@keyframes floatGlow1 {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(5vw, 5vh) scale(1.1); opacity: 0.7;}
+}
+@keyframes floatGlow2 {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-5vw, -5vh) scale(1.15); opacity: 0.6;}
 }
 
 /* 3D Glassmorphic Sidebar */
 [data-testid="stSidebar"] {
-    background: rgba(13, 15, 22, 0.85) !important;
+    background: rgba(13, 15, 22, 0.75) !important;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -234,7 +143,7 @@ header[data-testid="stHeader"] {
     border-radius: 20px 20px 4px 20px;
     padding: 14px 22px;
     margin: 8px 0 16px auto;
-    max-width: 80%;
+    max-width: 85%;
     width: fit-content;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
@@ -276,10 +185,16 @@ header[data-testid="stHeader"] {
 }
 
 [data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
     border-color: #60a5fa;
     color: #ffffff;
     transform: translateX(3px);
+}
+
+/* Mobile Responsiveness for Columns */
+@media (max-width: 768px) {
+    .anis-title { font-size: 2.5rem; }
+    .anis-subtitle { font-size: 1rem; }
 }
 </style>
 """
