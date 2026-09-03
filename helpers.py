@@ -851,89 +851,123 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
 
         # ---------------- GEMINI ----------------
         elif provider == "gemini" and keys_dict.get("gemini"):
-            try:
-                # Configure gemini client
-                genai.configure(api_key=keys_dict["gemini"])
+            # Implement retries with exponential backoff for rate-limit/network issues
+            max_retries_gemini = 3
+            base_backoff = 1  # seconds
+            gemini_succeeded = False
 
-                model_name = (
-                    preferred_model if preferred_provider == "gemini" else GEMINI_MODEL
-                )
-
-                system_prompt = ""
-                history = []
-
-                for msg in messages:
-                    if msg["role"] == "system":
-                        system_prompt = msg["content"]
-                    elif msg["role"] == "user":
-                        history.append(
-                            {
-                                "role": "user",
-                                "parts": [msg["content"]],
-                            }
-                        )
-                    elif msg["role"] == "assistant":
-                        history.append(
-                            {
-                                "role": "model",
-                                "parts": [msg["content"]],
-                            }
-                        )
-
-                # Start chat with existing history (exclude last user if we will send it separately)
+            for attempt in range(max_retries_gemini):
                 try:
-                    model = genai.GenerativeModel(model_name)
-                    chat = model.start_chat(history=history[:-1])
+                    # Configure gemini client
+                    genai.configure(api_key=keys_dict["gemini"])
 
-                    response = chat.send_message(
-                        system_prompt + "\n\n" + messages[-1]["content"],
-                        stream=True,
+                    model_name = (
+                        preferred_model if preferred_provider == "gemini" else GEMINI_MODEL
                     )
 
-                    for chunk in response:
-                        # chunk may have .text depending on the gh package version
-                        if getattr(chunk, "text", None):
-                            yield chunk.text
-                        elif getattr(chunk, "delta", None) and getattr(chunk.delta, "content", None):
-                            yield chunk.delta.content
-                    return
-                except Exception as inner_e:
-                    # Some versions of google-generativeai may not support GenerativeModel API.
-                    # Fallback to a simpler generate call: combine into one prompt and request a single response.
-                    print("Gemini chat streaming not available, falling back to single generate call:", inner_e)
-                    combined_prompt = system_prompt + "\n\n" + messages[-1]["content"]
+                    system_prompt = ""
+                    history = []
+
+                    for msg in messages:
+                        if msg["role"] == "system":
+                            system_prompt = msg["content"]
+                        elif msg["role"] == "user":
+                            history.append(
+                                {
+                                    "role": "user",
+                                    "parts": [msg["content"]],
+                                }
+                            )
+                        elif msg["role"] == "assistant":
+                            history.append(
+                                {
+                                    "role": "model",
+                                    "parts": [msg["content"]],
+                                }
+                            )
+
+                    # Start chat with existing history (exclude last user if we will send it separately)
                     try:
-                        resp = genai.generate(
-                            model=model_name,
-                            prompt=combined_prompt,
-                            max_output_tokens=max_tokens,
-                            temperature=default_temp,
+                        model = genai.GenerativeModel(model_name)
+                        chat = model.start_chat(history=history[:-1])
+
+                        response = chat.send_message(
+                            system_prompt + "\n\n" + messages[-1]["content"],
+                            stream=True,
                         )
-                        # resp may have .text or .output
-                        text = ""
-                        if getattr(resp, "text", None):
-                            text = resp.text
-                        elif isinstance(resp, dict):
-                            # older/newer clients might return dict
-                            text = resp.get("output", "") or resp.get("candidates", [{}])[0].get("content", "")
-                        else:
-                            text = str(resp)
 
-                        if text:
-                            yield text
-                            return
-                    except Exception as gen_err:
-                        print("Gemini generate fallback error:", gen_err)
-                        # Continue to other providers
-                        pass
+                        for chunk in response:
+                            # chunk may have .text depending on the gh package version
+                            if getattr(chunk, "text", None):
+                                yield chunk.text
+                            elif getattr(chunk, "delta", None) and getattr(chunk.delta, "content", None):
+                                yield chunk.delta.content
 
-            except RequestException as re:
-                print("Gemini Request Error:", re)
-                # If rate limited or network issue, wait a bit then continue
-                time.sleep(1)
-                pass
-            except Exception as e:
-                print("Gemini Error:", e)
+                        gemini_succeeded = True
+                        return
+                    except Exception as inner_e:
+                        # Some versions of google-generativeai may not support GenerativeModel API.
+                        # Fallback to a simpler generate call: combine into one prompt and request a single response.
+                        print("Gemini chat streaming not available or error occurred:", inner_e)
+                        combined_prompt = system_prompt + "\n\n" + messages[-1]["content"]
+                        try:
+                            resp = genai.generate(
+                                model=model_name,
+                                prompt=combined_prompt,
+                                max_output_tokens=max_tokens,
+                                temperature=default_temp,
+                            )
+                            # resp may have .text or .output
+                            text = ""
+                            if getattr(resp, "text", None):
+                                text = resp.text
+                            elif isinstance(resp, dict):
+                                # older/newer clients might return dict
+                                text = resp.get("output", "") or resp.get("candidates", [{}])[0].get("content", "")
+                            else:
+                                text = str(resp)
+
+                            if text:
+                                yield text
+                                gemini_succeeded = True
+                                return
+
+                        except Exception as gen_err:
+                            # Check for rate limit hints in the error message
+                            msg = str(gen_err).lower()
+                            print("Gemini generate fallback error:", gen_err)
+                            if "rate" in msg or "limit" in msg or isinstance(gen_err, RequestException):
+                                # transient issue: retry with backoff
+                                sleep_time = base_backoff * (2 ** attempt)
+                                print(f"Gemini rate/limit/network issue, retrying in {sleep_time}s (attempt {attempt+1}/{max_retries_gemini})")
+                                time.sleep(sleep_time)
+                                continue
+                            else:
+                                # non-retryable error: break and let other providers try
+                                break
+
+                except RequestException as re:
+                    print("Gemini Request Error:", re)
+                    # Transient network issue: retry with exponential backoff
+                    sleep_time = base_backoff * (2 ** attempt)
+                    print(f"Gemini RequestException, retrying in {sleep_time}s (attempt {attempt+1}/{max_retries_gemini})")
+                    time.sleep(sleep_time)
+                    continue
+                except Exception as e:
+                    # Generic exception: decide whether to retry
+                    msg = str(e).lower()
+                    print("Gemini Error:", e)
+                    if "rate" in msg or "limit" in msg or "429" in msg:
+                        sleep_time = base_backoff * (2 ** attempt)
+                        print(f"Gemini rate limit detected, retrying in {sleep_time}s (attempt {attempt+1}/{max_retries_gemini})")
+                        time.sleep(sleep_time)
+                        continue
+                    else:
+                        # non-retryable, break
+                        break
+
+            if not gemini_succeeded:
+                print("Gemini attempts exhausted or failed, moving to next provider.")
                 pass
 
         # ---------------- MISTRAL ----------------
