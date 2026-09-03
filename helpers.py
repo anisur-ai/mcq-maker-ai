@@ -6,6 +6,8 @@ import pypdf
 import google.generativeai as genai
 from groq import Groq
 from openai import OpenAI
+import time
+from requests.exceptions import RequestException
 # =====================================================
 # CONSTANTS
 # =====================================================
@@ -335,11 +337,8 @@ def needs_web_search(prompt, groq_api_key):
                     "content":
                     (
                         "Reply ONLY YES or NO.\n"
-                        "YES = if current information, latest news, "
-                        "weather, price, sports, stock, internet facts "
-                        "or live information is required.\n"
-                        "NO = for programming, mathematics, writing, "
-                        "translation, explanation, history or general knowledge."
+                        "YES = if current information, latest news, tech, weather, price, sports, stock, internet facts or live information is required.\n"
+                        "NO = for programming, mathematics, writing, translation, explanation, history or general knowledge."
                     )
                 },
                 {
@@ -697,7 +696,7 @@ def build_ai_messages(
     user_prompt,
     file_context="",
     external_context=""
-):
+ ):
     """
     Build the final messages list that will
     be sent to the AI model.
@@ -724,13 +723,13 @@ def build_ai_messages(
 
     if file_context.strip():
         final_input += (
-            "\n\n========== FILE ==========\n"
+            "\n\n========== FILE =========="
             + file_context
         )
 
     if external_context.strip():
         final_input += (
-            "\n\n========== WEB ==========\n"
+            "\n\n========== WEB =========="
             + external_context
         )
 
@@ -800,15 +799,16 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
     preferred_provider = router_info["provider"]
     preferred_model = router_info["model"]
 
+    # Prioritize Gemini as the primary provider for AI calls, keep others as fallbacks
     providers_order = [
+        "gemini",
         preferred_provider,
         "groq",
-        "gemini",
         "mistral",
         "openrouter",
     ]
 
-    # Remove duplicates
+    # Remove duplicates while preserving order
     providers_order = list(dict.fromkeys(providers_order))
 
     for provider in providers_order:
@@ -845,15 +845,19 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
                         yield chunk.choices[0].delta.content
                 return
 
-            except Exception:
+            except Exception as e:
+                print("GROQ Error:", e)
                 pass
 
         # ---------------- GEMINI ----------------
         elif provider == "gemini" and keys_dict.get("gemini"):
             try:
+                # Configure gemini client
                 genai.configure(api_key=keys_dict["gemini"])
 
-                model = genai.GenerativeModel("gemini-2.5-flash")
+                model_name = (
+                    preferred_model if preferred_provider == "gemini" else GEMINI_MODEL
+                )
 
                 system_prompt = ""
                 history = []
@@ -876,19 +880,60 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
                             }
                         )
 
-                chat = model.start_chat(history=history[:-1])
+                # Start chat with existing history (exclude last user if we will send it separately)
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    chat = model.start_chat(history=history[:-1])
 
-                response = chat.send_message(
-                    system_prompt + "\n\n" + messages[-1]["content"],
-                    stream=True,
-                )
+                    response = chat.send_message(
+                        system_prompt + "\n\n" + messages[-1]["content"],
+                        stream=True,
+                    )
 
-                for chunk in response:
-                    if chunk.text:
-                        yield chunk.text
-                return
+                    for chunk in response:
+                        # chunk may have .text depending on the gh package version
+                        if getattr(chunk, "text", None):
+                            yield chunk.text
+                        elif getattr(chunk, "delta", None) and getattr(chunk.delta, "content", None):
+                            yield chunk.delta.content
+                    return
+                except Exception as inner_e:
+                    # Some versions of google-generativeai may not support GenerativeModel API.
+                    # Fallback to a simpler generate call: combine into one prompt and request a single response.
+                    print("Gemini chat streaming not available, falling back to single generate call:", inner_e)
+                    combined_prompt = system_prompt + "\n\n" + messages[-1]["content"]
+                    try:
+                        resp = genai.generate(
+                            model=model_name,
+                            prompt=combined_prompt,
+                            max_output_tokens=max_tokens,
+                            temperature=default_temp,
+                        )
+                        # resp may have .text or .output
+                        text = ""
+                        if getattr(resp, "text", None):
+                            text = resp.text
+                        elif isinstance(resp, dict):
+                            # older/newer clients might return dict
+                            text = resp.get("output", "") or resp.get("candidates", [{}])[0].get("content", "")
+                        else:
+                            text = str(resp)
 
-            except Exception:
+                        if text:
+                            yield text
+                            return
+                    except Exception as gen_err:
+                        print("Gemini generate fallback error:", gen_err)
+                        # Continue to other providers
+                        pass
+
+            except RequestException as re:
+                print("Gemini Request Error:", re)
+                # If rate limited or network issue, wait a bit then continue
+                time.sleep(1)
+                pass
+            except Exception as e:
+                print("Gemini Error:", e)
                 pass
 
         # ---------------- MISTRAL ----------------
@@ -918,7 +963,8 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
                         yield chunk.choices[0].delta.content
                 return
 
-            except Exception:
+            except Exception as e:
+                print("Mistral Error:", e)
                 pass
 
         # ---------------- OPENROUTER ----------------
@@ -954,7 +1000,8 @@ def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096
                         yield chunk.choices[0].delta.content
                 return
 
-            except Exception:
+            except Exception as e:
+                print("OpenRouter Error:", e)
                 pass
 
     yield "ERROR_ALL_FAILED"
