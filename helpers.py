@@ -506,4 +506,78 @@ def provider_aware_ai_fallback(
     candidate_order = [preferred] + [p for p in all_providers if p != preferred]
 
     # Filter strictly to providers that have an API key configured
-    active_providers = [p for p in candidate_order if keys_d
+active_providers = [p for p in candidate_order if keys_dict.get(p, "").strip()]
+
+    if not active_providers:
+        logger.error("[AI] No valid AI provider API keys configured.")
+        yield "ERROR_ALL_FAILED"
+        return
+
+    total_candidates = len(active_providers)
+    success = False
+
+    for attempt_idx, provider in enumerate(active_providers):
+        api_key = keys_dict[provider].strip()
+        model = router_info.get("provider_models", {}).get(provider, PROVIDER_CONFIG[provider]["default_model"])
+
+        # Controlled retry: max 1 retry for transient errors (429, 500, 502, 503, 504)
+        max_retries = 1
+        for retry in range(max_retries + 1):
+            t_start = time.time()
+            try:
+                logger.info(f"[AI] Attempting {provider.upper()} ({model}) [Attempt {retry + 1}]...")
+                stream = _stream_openai_compatible(
+                    provider_key=provider,
+                    api_key=api_key,
+                    model=model,
+                    messages=messages,
+                )
+
+                yielded_any = False
+                for token in stream:
+                    yielded_any = True
+                    yield token
+
+                if yielded_any:
+                    elapsed = round(time.time() - t_start, 2)
+                    logger.info(f"[AI] {provider.upper()} completed successfully in {elapsed}s.")
+                    success = True
+                    return
+
+            except requests.HTTPError as http_err:
+                status = getattr(http_err.response, "status_code", 0)
+                logger.warning(f"[AI] {provider.upper()} returned HTTP {status}.")
+
+                # Immediate fallback for client, authentication, or model-not-found errors
+                if status in (400, 401, 403, 404):
+                    logger.info(f"[AI] Non-recoverable error ({status}). Skipping {provider.upper()}.")
+                    break
+
+                # Transient errors (429 rate limit or 5xx server issues)
+                if status in (429, 500, 502, 503, 504) and retry < max_retries:
+                    logger.info(f"[AI] Transient error ({status}). Backing off 1.2s before retry...")
+                    time.sleep(1.2)
+                    continue
+                break
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as net_err:
+                logger.warning(f"[AI] {provider.upper()} network error: {type(net_err).__name__}")
+                if retry < max_retries:
+                    time.sleep(1.0)
+                    continue
+                break
+
+            except Exception as ex:
+                logger.error(f"[AI] Unexpected exception with {provider.upper()}: {ex}")
+                break
+
+        # Log fallback step to next provider if available
+        if attempt_idx < total_candidates - 1:
+            next_provider = active_providers[attempt_idx + 1]
+            logger.info(f"[AI] Falling back from {provider.upper()} to {next_provider.upper()}...")
+
+    # Only reached if EVERY usable configured provider has failed
+    if not success:
+        logger.error("[AI] All configured providers failed.")
+        yield "ERROR_ALL_FAILED"
+    
