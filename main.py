@@ -12,7 +12,6 @@ except ImportError:
     pass
 
 # Import all necessary functions directly from helpers.py
-# (এগুলো কোনোভাবেই পরিবর্তন করা হয়নি, আপনার নির্দেশ অনুযায়ী)
 from helpers import (
     smart_read_file,
     needs_web_search,
@@ -36,8 +35,6 @@ st.set_page_config(
 
 # =====================================================
 # MODERN 3D OBSIDIAN CSS THEME & GEMINI BACKGROUND
-# (এখানে জেমিনির মতো স্মুথ এবং লাইটওয়েট ব্যাকগ্রাউন্ড দেওয়া হয়েছে 
-# যা লো-এন্ড ফোনে খুব সহজেই সাপোর্ট করবে)
 # =====================================================
 ANIS_AI_CSS = """
 <style>
@@ -258,7 +255,7 @@ messages = current_chat["messages"]
 
 
 # =====================================================
-# SIDEBAR: CLICKABLE CHAT HISTORY (INTERACTIVE)
+# SIDEBAR: CHAT HISTORY + FILE UPLOAD (FIXED)
 # =====================================================
 with st.sidebar:
     st.markdown("### 💬 **Chat History**")
@@ -285,6 +282,14 @@ with st.sidebar:
             st.rerun()
 
     st.markdown("---")
+    
+    # ✅ FIXED: File upload moved to sidebar (PROPER LOCATION)
+    uploaded_file = st.file_uploader(
+        "📎 Attach File",
+        type=["png", "jpg", "jpeg", "webp", "pdf", "docx", "txt"],
+        key="file_upload"
+    )
+    
     force_web_search = st.checkbox("🌐 Always Search Live Web", value=False)
 
 
@@ -324,38 +329,26 @@ for msg in messages:
 
 
 # =====================================================
-# CHAT INPUT WITH BUILT-IN FILE/IMAGE ATTACHMENT (+)
+# CHAT INPUT (FIXED - Simple text input only)
 # =====================================================
 temp_prompt = st.session_state.pop("temp_prompt", None)
 
-try:
-    # Streamlit native input with attached '+' upload button
-    user_input = st.chat_input(
-        "Ask Anis AI or attach file...",
-        accept_file=True,
-        file_type=["png", "jpg", "jpeg", "webp", "pdf", "docx", "txt"],
-    )
-except TypeError:
-    # Fallback for earlier versions of Streamlit
-    user_input = st.chat_input("Ask Anis AI or type a prompt...")
+# ✅ FIXED: Simple text-only input (st.chat_input doesn't support accept_file)
+user_input = st.chat_input("Ask Anis AI or type a prompt...")
 
-# Extract Text & File from input
+# ✅ FIXED: Extract text and file from proper sources
 prompt_text = None
-attached_file = None
+attached_file = uploaded_file  # From sidebar file uploader
 
+# Get text from chat input
 if user_input:
-    if hasattr(user_input, "text") or isinstance(user_input, dict):
-        prompt_text = getattr(user_input, "text", "") or user_input.get("text", "")
-        files = getattr(user_input, "files", []) or user_input.get("files", [])
-        if files:
-            attached_file = files[0]
-    elif isinstance(user_input, str):
-        prompt_text = user_input
+    prompt_text = user_input.strip()
 
+# Use temp prompt if no text input
 if not prompt_text and temp_prompt:
     prompt_text = temp_prompt
 
-# If only a file was attached without typing text
+# Generate default prompt if only file was attached (no text)
 if attached_file and not prompt_text:
     prompt_text = f"Please analyze and explain the uploaded file: {attached_file.name}"
 
