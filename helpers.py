@@ -1,1041 +1,509 @@
+"""
+Anis AI - Backend Helper Functions & Resilient Provider Fallback Engine
+Provides search, scraping, file parsing/OCR, task routing, and unified streaming fallback.
+Compatible with Python 3.10+ through Python 3.14+ and modern Streamlit.
+"""
+
 import io
-import requests
-import docx
-import fitz  # PyMuPDF
-import pypdf
-import google.generativeai as genai
-from groq import Groq
-from openai import OpenAI
+import json
+import logging
+import os
+import re
 import time
-from requests.exceptions import RequestException
-# =====================================================
-# CONSTANTS
-# =====================================================
+import urllib.parse
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
-MAX_CONTEXT_CHARS = 12000
-MAX_WEB_CONTEXT = 10000
-
-GROQ_FAST_MODEL = "llama-3.1-8b-instant"
-GROQ_SMART_MODEL = "llama-3.3-70b-versatile"
-
-GEMINI_MODEL = "gemini-2.5-flash"
-
-MISTRAL_MODEL = "mistral-small-latest"
-
-OPENROUTER_DEFAULT_MODEL = "mistralai/mistral-small-3.2-24b-instruct:free"
-OPENROUTER_CODE_MODEL = "deepseek/deepseek-chat"
-
-SERPER_API_URL = "https://google.serper.dev/search"
-
+import requests
+from bs4 import BeautifulSoup
+import pypdf
+import docx
 
 # =====================================================
-# COMMON UTILITIES
+# INTERNAL LOGGING (Zero Secrets/Tokens Logged)
 # =====================================================
+logger = logging.getLogger("AnisAI")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] [AnisAI]: %(message)s", datefmt="%H:%M:%S"))
+    logger.addHandler(ch)
 
-def truncate_text(text: str, max_chars: int = MAX_CONTEXT_CHARS):
+# Reusable HTTP session with connection pooling for lowest possible latency
+http_session = requests.Session()
+
+# =====================================================
+# CENTRALIZED PROVIDER & MODEL CONFIGURATION
+# =====================================================
+PROVIDER_CONFIG: Dict[str, Dict[str, str]] = {
+    "groq": {
+        "name": "Groq",
+        "base_url": "https://api.groq.com/openai/v1/chat/completions",
+        "default_model": "llama-3.3-70b-versatile",
+        "fast_model": "llama-3.1-8b-instant",
+        "coding_model": "llama-3.3-70b-versatile",
+        "reasoning_model": "llama-3.3-70b-versatile",
+    },
+    "gemini": {
+        "name": "Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "default_model": "gemini-1.5-flash",
+        "fast_model": "gemini-1.5-flash",
+        "coding_model": "gemini-1.5-flash",
+        "reasoning_model": "gemini-1.5-pro",
+        "long_context_model": "gemini-1.5-flash",
+    },
+    "mistral": {
+        "name": "Mistral",
+        "base_url": "https://api.mistral.ai/v1/chat/completions",
+        "default_model": "mistral-small-latest",
+        "fast_model": "mistral-small-latest",
+        "coding_model": "codestral-latest",
+        "reasoning_model": "mistral-large-latest",
+    },
+    "openrouter": {
+        "name": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1/chat/completions",
+        "default_model": "meta-llama/llama-3.3-70b-instruct",
+        "fast_model": "google/gemini-2.0-flash-lite-001",
+        "coding_model": "meta-llama/llama-3.3-70b-instruct",
+        "reasoning_model": "deepseek/deepseek-chat",
+    },
+}
+
+# =====================================================
+# 1. FILE & OCR PROCESSING (smart_read_file)
+# =====================================================
+def smart_read_file(uploaded_file, ocr_api_key: Optional[str] = None) -> str:
     """
-    Prevent huge prompts.
+    Extracts text from PDF, DOCX, TXT, and images (via OCR.space).
+    Includes length bounds to prevent prompt bloat and memory exhaustion.
     """
-
-    if not text:
-        return ""
-
-    if len(text) <= max_chars:
-        return text
-
-    return (
-        text[:max_chars]
-        + "\n\n[Content truncated because it exceeded the maximum context length.]"
-    )
-
-
-# =====================================================
-# OCR.SPACE
-# =====================================================
-
-def ocr_space_file(file_obj, api_key, language="eng+ben"):
-
-    if not api_key:
-        return ""
-
-    try:
-
-        url = "https://api.ocr.space/parse/image"
-
-        file_bytes = file_obj.read()
-
-        file_type = getattr(
-            file_obj,
-            "type",
-            "image/png"
-        )
-
-        files = {
-            "filename": (
-                getattr(file_obj, "name", "image.png"),
-                file_bytes,
-                file_type
-            )
-        }
-
-        payload = {
-            "apikey": api_key,
-            "language": language,
-            "OCREngine": 2,
-            "scale": True,
-            "isOverlayRequired": False
-        }
-
-        response = requests.post(
-            url,
-            data=payload,
-            files=files,
-            timeout=30
-        )
-
-        result = response.json()
-
-        if result.get("IsErroredOnProcessing"):
-            return ""
-
-        parsed = result.get("ParsedResults")
-
-        if parsed:
-            return parsed[0].get("ParsedText", "")
-
-    except Exception as e:
-        print("OCR Error:", e)
-
-    return ""
-
-
-# =====================================================
-# SMART FILE READER
-# =====================================================
-
-def smart_read_file(uploaded_file, ocr_api_key):
-
     if uploaded_file is None:
         return ""
 
-    filename = uploaded_file.name.lower()
-
-    extracted = ""
+    file_name = uploaded_file.name
+    file_bytes = uploaded_file.getvalue()
+    file_ext = file_name.split(".")[-1].lower()
+    extracted_text = ""
 
     try:
+        if file_ext == "txt":
+            try:
+                extracted_text = file_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                extracted_text = file_bytes.decode("latin-1", errors="replace")
 
-        # --------------------------
-        # IMAGE
-        # --------------------------
+        elif file_ext == "pdf":
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            pages_text = []
+            max_pages = min(len(reader.pages), 30)
+            for idx in range(max_pages):
+                page_text = reader.pages[idx].extract_text() or ""
+                if page_text.strip():
+                    pages_text.append(f"--- Page {idx + 1} ---\n{page_text.strip()}")
+            extracted_text = "\n\n".join(pages_text)
 
-        if filename.endswith(
-            (
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".webp"
-            )
-        ):
+        elif file_ext == "docx":
+            doc = docx.Document(io.BytesIO(file_bytes))
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            extracted_text = "\n".join(paragraphs)
 
-            return truncate_text(
-                ocr_space_file(
-                    uploaded_file,
-                    ocr_api_key
+        elif file_ext in ["png", "jpg", "jpeg", "webp"]:
+            api_key = ocr_api_key.strip() if ocr_api_key else ""
+            if not api_key:
+                return (
+                    f"[Image Attached: {file_name}]\n"
+                    f"(Note: OCR_API_KEY is not configured in secrets. "
+                    f"Please provide an OCR.space key to parse text from images directly.)"
                 )
-            )
 
-        # --------------------------
-        # DOCX
-        # --------------------------
-
-        elif filename.endswith(".docx"):
-
-            document = docx.Document(uploaded_file)
-
-            for para in document.paragraphs:
-                extracted += para.text + "\n"
-
-        # --------------------------
-        # TXT
-        # --------------------------
-
-        elif filename.endswith(".txt"):
-
-            extracted = uploaded_file.read().decode(
-                "utf-8",
-                errors="ignore"
-            )
-
-        # --------------------------
-        # PDF
-        # --------------------------
-
-        elif filename.endswith(".pdf"):
-
-            pdf_bytes = uploaded_file.read()
-
-            pdf = fitz.open(
-                stream=pdf_bytes,
-                filetype="pdf"
-            )
-
-            for index in range(len(pdf)):
-
-                page = pdf[index]
-
-                text = page.get_text()
-
-                if text.strip():
-
-                    extracted += text + "\n"
-
+            ocr_url = "https://api.ocr.space/parse/image"
+            files = {file_name: file_bytes}
+            data = {
+                "apikey": api_key,
+                "language": "eng",
+                "isOverlayRequired": False,
+                "detectOrientation": True,
+                "scale": True,
+            }
+            res = http_session.post(ocr_url, files=files, data=data, timeout=20)
+            if res.status_code == 200:
+                result_json = res.json()
+                if not result_json.get("IsErroredOnProcessing", False):
+                    parsed_results = result_json.get("ParsedResults", [])
+                    extracted_text = "\n".join(
+                        [r.get("ParsedText", "").strip() for r in parsed_results if r.get("ParsedText")]
+                    )
+                    if not extracted_text:
+                        extracted_text = "(OCR completed, but no legible text was detected in the image.)"
                 else:
-
-                    pix = page.get_pixmap(
-                        dpi=180
-                    )
-
-                    image_bytes = pix.tobytes("png")
-
-                    class TempImage:
-
-                        def __init__(self, data, name):
-
-                            self.data = data
-
-                            self.name = name
-
-                        def read(self):
-
-                            return self.data
-
-                    img = TempImage(
-                        image_bytes,
-                        f"page_{index}.png"
-                    )
-
-                    ocr = ocr_space_file(
-                        img,
-                        ocr_api_key
-                    )
-
-                    if ocr:
-
-                        extracted += (
-                            f"\n[OCR Page {index+1}]\n"
-                            + ocr
-                            + "\n"
-                        )
+                    error_msg = result_json.get("ErrorMessage", ["OCR processing error"])[0]
+                    extracted_text = f"(OCR Error: {error_msg})"
+            else:
+                extracted_text = f"(OCR Service unreachable, HTTP status: {res.status_code})"
 
     except Exception as e:
-
-        print("File Reader Error:", e)
-
-    return truncate_text(extracted)
-
-
-# =====================================================
-# SERPER API SEARCH (PRIMARY)
-# =====================================================
-
-def serper_search(query, serper_api_key):
-    """
-    Search using Serper API (Google Search).
-    Returns: (formatted_text, urls_list)
-    """
-
-    if not serper_api_key:
-        return "", []
-
-    try:
-
-        headers = {
-            "X-API-KEY": serper_api_key,
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "q": query,
-            "num": 5
-        }
-
-        response = requests.post(
-            SERPER_API_URL,
-            headers=headers,
-            json=payload,
-            timeout=10
-        )
-
-        if response.status_code == 200:
-
-            data = response.json()
-
-            results = data.get("organic", [])
-
-            if results:
-
-                text = ""
-                urls = []
-
-                for result in results:
-
-                    title = result.get("title", "")
-                    url = result.get("link", "")
-                    snippet = result.get("snippet", "")
-
-                    if url:
-                        urls.append(url)
-
-                    text += (
-                        f"**{title}**\n"
-                        f"URL: {url}\n"
-                        f"{snippet}\n\n"
-                    )
-
-                return truncate_text(text, MAX_WEB_CONTEXT), urls
-
-        else:
-
-            error_msg = f"Serper API Error: {response.status_code}"
-            print(error_msg)
-
-    except requests.Timeout:
-
-        print("Serper Search Timeout")
-
-    except Exception as e:
-
-        print("Serper Search Error:", e)
-
-    return "", []
-
-
-# =====================================================
-# AI INTENT DETECTOR
-# =====================================================
-
-def needs_web_search(prompt, groq_api_key):
-    """
-    Decide automatically whether live web search is required.
-    Returns True or False.
-    """
-
-    if not groq_api_key:
-        return False
-
-    try:
-
-        client = Groq(api_key=groq_api_key)
-
-        response = client.chat.completions.create(
-            model=GROQ_FAST_MODEL,
-            temperature=0,
-            max_completion_tokens=5,
-            messages=[
-                {
-                    "role": "system",
-                    "content":
-                    (
-                        "Reply ONLY YES or NO.\n"
-                        "YES = if current information, latest news, tech, weather, price, sports, stock, internet facts or live information is required.\n"
-                        "NO = for programming, mathematics, writing, translation, explanation, history or general knowledge."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
-
-        answer = (
-            response
-            .choices[0]
-            .message
-            .content
-            .strip()
-            .upper()
-        )
-
-        return answer == "YES"
-
-    except Exception as e:
-
-        print("Intent Error:", e)
-
-        return False
-
-
-# =====================================================
-# SMART SEARCH WITH SERPER PRIORITY + FALLBACKS
-# =====================================================
-
-def smart_search(query, serper_key, tavily_key, jina_key=None):
-    """
-    Smart search with priority order:
-    1. Serper API (Google Search) - PRIMARY
-    2. Tavily Search - FALLBACK 1
-    3. Jina Search - FALLBACK 2
-    
-    Returns: (formatted_text, urls_list)
-    """
-
-    # --------------------------
-    # Priority 1: Serper API
-    # --------------------------
-
-    if serper_key:
-
-        search_text, urls = serper_search(query, serper_key)
-
-        if search_text and urls:
-            return search_text, urls
-
-
-    # --------------------------
-    # Priority 2: Tavily Search
-    # --------------------------
-
-    if tavily_key:
-
-        try:
-
-            response = requests.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": tavily_key,
-                    "query": query,
-                    "search_depth": "advanced",
-                    "max_results": 3
-                },
-                timeout=12
-            )
-
-            if response.status_code == 200:
-
-                data = response.json()
-
-                results = data.get("results", [])
-
-                if results:
-
-                    text = ""
-
-                    urls = []
-
-                    for item in results:
-
-                        url = item.get("url", "")
-
-                        content = item.get("content", "")
-
-                        urls.append(url)
-
-                        text += (
-                            f"Source: {url}\n"
-                            f"{content}\n\n"
-                        )
-
-                    return truncate_text(text), urls
-
-        except Exception as e:
-
-            print("Tavily Error:", e)
-
-
-    # --------------------------
-    # Priority 3: Jina Search Fallback
-    # --------------------------
-
-    try:
-
-        headers = {
-            "Accept": "application/json"
-        }
-
-        if jina_key:
-
-            headers["Authorization"] = f"Bearer {jina_key}"
-
-        response = requests.get(
-            f"https://s.jina.ai/{query}",
-            headers=headers,
-            timeout=12
-        )
-
-        if response.status_code == 200:
-
-            data = response.json()
-
-            items = data.get("data", [])
-
-            if items:
-
-                text = ""
-
-                urls = []
-
-                for item in items[:3]:
-
-                    url = item.get("url", "")
-
-                    content = item.get("content", "")
-
-                    urls.append(url)
-
-                    text += (
-                        f"Source: {url}\n"
-                        f"{content}\n\n"
-                    )
-
-                return truncate_text(text), urls
-
-    except Exception as e:
-
-        print("Jina Search Error:", e)
-
-    return "", []
-
-
-# =====================================================
-# SMART URL SCRAPER
-# =====================================================
-
-def smart_scrape(url, firecrawl_key, jina_key):
-
-    if firecrawl_key:
-
-        try:
-
-            response = requests.post(
-                "https://api.firecrawl.dev/v1/scrape",
-                headers={
-                    "Authorization": f"Bearer {firecrawl_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "url": url,
-                    "formats": ["markdown"]
-                },
-                timeout=15
-            )
-
-            if response.status_code == 200:
-
-                data = response.json()
-
-                if data.get("success"):
-
-                    markdown = (
-                        data
-                        .get("data", {})
-                        .get("markdown", "")
-                    )
-
-                    return (
-                        truncate_text(markdown),
-                        [url]
-                    )
-
-        except Exception as e:
-
-            print("Firecrawl Error:", e)
-
-
-    # ------------------------
-    # Jina Reader Fallback
-    # ------------------------
-
-    try:
-
-        headers = {
-            "Accept": "application/json"
-        }
-
-        if jina_key:
-
-            headers["Authorization"] = (
-                f"Bearer {jina_key}"
-            )
-
-        response = requests.get(
-            f"https://r.jina.ai/{url}",
-            headers=headers,
-            timeout=15
-        )
-
-        if response.status_code == 200:
-
-            data = response.json()
-
-            content = (
-                data
-                .get("data", {})
-                .get("content", "")
-            )
-
-            return (
-                truncate_text(content),
-                [url]
-            )
-
-    except Exception as e:
-
-        print("Jina Reader Error:", e)
-
-    return "", []
-
-
-# =====================================================
-# DYNAMIC MODEL ROUTER
-# =====================================================
-
-def select_model_by_task(user_prompt, context_text=""):
-    """
-    Decide which provider/model should be used.
-    Returns:
-    {
-        "provider": "...",
-        "model": "..."
-    }
-    """
-
-    query = user_prompt.lower()
-
-    total_length = len(user_prompt) + len(context_text)
-
-    # --------------------------
-    # Coding
-    # --------------------------
-
-    coding_words = [
-        "python",
-        "java",
-        "javascript",
-        "html",
-        "css",
-        "php",
-        "sql",
-        "bug",
-        "debug",
-        "code",
-        "program",
-        "api",
-        "streamlit"
-    ]
-
-    if any(word in query for word in coding_words):
-
-        return {
-            "provider": "openrouter",
-            "model": OPENROUTER_CODE_MODEL
-        }
-
-    # --------------------------
-    # Very Large Context
-    # --------------------------
-
-    if total_length > 6000:
-
-        return {
-            "provider": "gemini",
-            "model": GEMINI_MODEL
-        }
-
-    # --------------------------
-    # Long Question
-    # --------------------------
-
-    if (
-        len(user_prompt.split()) > 50
-        or total_length > 1200
-    ):
-
-        return {
-            "provider": "groq",
-            "model": GROQ_SMART_MODEL
-        }
-
-    # --------------------------
-    # Default
-    # --------------------------
-
-    return {
-        "provider": "groq",
-        "model": GROQ_FAST_MODEL
-    }
-
-
-# =====================================================
-# CHAT MEMORY
-# =====================================================
-
-def manage_conversation_memory(
-    messages,
-    groq_api_key,
-    previous_summary=""
-):
-
-    """
-    Compress old conversations
-    to reduce token usage.
-    """
-
-    if len(messages) < 18:
-
-        return previous_summary
-
-
-# =====================================================
-# BUILD FINAL AI MESSAGES
-# =====================================================
-
-def build_ai_messages(
-    system_prompt,
-    managed_messages,
-    user_prompt,
-    file_context="",
-    external_context=""
- ):
-    """
-    Build the final messages list that will
-    be sent to the AI model.
-    """
-
-    ai_messages = [
-        {
-            "role": "system",
-            "content": system_prompt
-        }
-    ]
-
-    for message in managed_messages:
-
-        if (
-            message["role"] == "system"
-            and message["content"] == system_prompt
-        ):
-            continue
-
-        ai_messages.append(message)
-
-    final_input = user_prompt
-
-    if file_context.strip():
-        final_input += (
-            "\n\n========== FILE =========="
-            + file_context
-        )
-
-    if external_context.strip():
-        final_input += (
-            "\n\n========== WEB =========="
-            + external_context
-        )
-
-    ai_messages.append(
-        {
-            "role": "user",
-            "content": final_input
-        }
+        logger.error(f"Error reading file {file_name}: {e}")
+        extracted_text = f"(Error processing file content: {str(e)})"
+
+    # Limit text size to ~24,000 characters (~6k tokens)
+    if len(extracted_text) > 24000:
+        extracted_text = extracted_text[:24000] + "\n\n... [Content truncated for prompt size limits]"
+
+    return (
+        f"=== ATTACHED FILE CONTEXT ===\n"
+        f"Filename: {file_name}\n"
+        f"Type: {file_ext.upper()}\n"
+        f"Content:\n{extracted_text}\n"
+        f"=== END OF FILE CONTEXT ===\n"
     )
 
-    return ai_messages
+# =====================================================
+# 2. WEB SEARCH DETECTION (needs_web_search)
+# =====================================================
+SEARCH_KEYWORDS = {
+    "today", "yesterday", "tomorrow", "tonight", "this week", "this month", "this year",
+    "latest", "recent", "recently", "current", "currently", "now", "breaking", "news",
+    "weather", "stock price", "stock", "score", "match", "election", "who is", "who won",
+    "2025", "2026", "2027", "update", "updates", "release date", "price of"
+}
 
+def needs_web_search(prompt_text: str, groq_api_key: Optional[str] = None) -> bool:
+    """
+    Evaluates whether live search is needed. Fast regex heuristics guarantee
+    0ms latency for general conversation.
+    """
+    clean_prompt = prompt_text.lower().strip()
+
+    # Fast heuristic search check
+    if any(kw in clean_prompt for kw in SEARCH_KEYWORDS):
+        return True
+
+    # Check for direct search intents
+    if re.search(r"^(search|google|look up|find out|browse)\b", clean_prompt):
+        return True
+
+    return False
 
 # =====================================================
-# FORMAT SOURCES
+# 3. WEB SEARCH ENGINE (smart_search)
 # =====================================================
+def smart_search(
+    query: str,
+    serper_key: Optional[str] = None,
+    tavily_key: Optional[str] = None,
+    jina_key: Optional[str] = None,
+) -> Tuple[str, List[Dict[str, str]]]:
+    """
+    Cascading web search: Serper -> Tavily -> Jina Search.
+    Returns aggregated context text and structured source references.
+    """
+    sources: List[Dict[str, str]] = []
+    context_lines: List[str] = []
 
-def format_sources(source_list):
+    # 1. Try Serper (Google Search API)
+    if serper_key and serper_key.strip():
+        try:
+            res = http_session.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": serper_key.strip(), "Content-Type": "application/json"},
+                json={"q": query, "num": 5},
+                timeout=7,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                for item in data.get("organic", [])[:5]:
+                    title = item.get("title", "")
+                    link = item.get("link", "")
+                    snippet = item.get("snippet", "")
+                    if link:
+                        sources.append({"title": title, "url": link})
+                        context_lines.append(f"• {title}: {snippet} ({link})")
+                if context_lines:
+                    return "\n".join(context_lines), sources
+        except Exception as e:
+            logger.warning(f"Serper search failed: {e}. Falling back to Tavily.")
 
-    if not source_list:
+    # 2. Try Tavily Search API
+    if tavily_key and tavily_key.strip():
+        try:
+            res = http_session.post(
+                "https://api.tavily.com/search",
+                headers={"Content-Type": "application/json"},
+                json={"api_key": tavily_key.strip(), "query": query, "search_depth": "basic", "max_results": 5},
+                timeout=7,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                for item in data.get("results", [])[:5]:
+                    title = item.get("title", "")
+                    url = item.get("url", "")
+                    content = item.get("content", "")
+                    if url:
+                        sources.append({"title": title, "url": url})
+                        context_lines.append(f"• {title}: {content} ({url})")
+                if context_lines:
+                    return "\n".join(context_lines), sources
+        except Exception as e:
+            logger.warning(f"Tavily search failed: {e}. Falling back to Jina.")
+
+    # 3. Try Jina Search API
+    try:
+        headers = {"Accept": "application/json"}
+        if jina_key and jina_key.strip():
+            headers["Authorization"] = f"Bearer {jina_key.strip()}"
+        encoded_query = urllib.parse.quote(query)
+        res = http_session.get(f"https://s.jina.ai/{encoded_query}", headers=headers, timeout=7)
+        if res.status_code == 200:
+            data = res.json()
+            for item in data.get("data", [])[:5]:
+                title = item.get("title", "")
+                url = item.get("url", "")
+                description = item.get("description", item.get("content", ""))[:300]
+                if url:
+                    sources.append({"title": title, "url": url})
+                    context_lines.append(f"• {title}: {description} ({url})")
+            if context_lines:
+                return "\n".join(context_lines), sources
+    except Exception as e:
+        logger.warning(f"Jina search failed: {e}.")
+
+    return "No search results could be retrieved.", sources
+
+# =====================================================
+# 4. URL SCRAPING ENGINE (smart_scrape)
+# =====================================================
+def smart_scrape(
+    url: str,
+    firecrawl_key: Optional[str] = None,
+    jina_key: Optional[str] = None,
+) -> Tuple[str, List[Dict[str, str]]]:
+    """
+    Cascading Web Scraper: Firecrawl -> Jina Reader -> Native HTML parser.
+    """
+    sources = [{"title": url, "url": url}]
+
+    # 1. Try Firecrawl Scrape API
+    if firecrawl_key and firecrawl_key.strip():
+        try:
+            res = http_session.post(
+                "https://api.firecrawl.dev/v1/scrape",
+                headers={"Authorization": f"Bearer {firecrawl_key.strip()}", "Content-Type": "application/json"},
+                json={"url": url, "formats": ["markdown"]},
+                timeout=12,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                markdown = data.get("data", {}).get("markdown", "")
+                if markdown:
+                    return f"=== Scraped Content ({url}) ===\n{markdown[:6000]}\n", sources
+        except Exception as e:
+            logger.warning(f"Firecrawl scrape failed: {e}. Trying Jina Reader.")
+
+    # 2. Try Jina Reader
+    try:
+        headers = {}
+        if jina_key and jina_key.strip():
+            headers["Authorization"] = f"Bearer {jina_key.strip()}"
+        res = http_session.get(f"https://r.jina.ai/{url}", headers=headers, timeout=10)
+        if res.status_code == 200 and res.text.strip():
+            return f"=== Scraped Content ({url}) ===\n{res.text[:6000]}\n", sources
+    except Exception as e:
+        logger.warning(f"Jina Reader failed: {e}. Trying native fallback.")
+
+    # 3. Native requests + BeautifulSoup fallback
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        res = http_session.get(url, headers=headers, timeout=8)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            for element in soup(["script", "style", "nav", "footer", "header", "noscript"]):
+                element.decompose()
+            clean_text = " ".join(soup.stripped_strings)[:5000]
+            return f"=== Scraped Content ({url}) ===\n{clean_text}\n", sources
+    except Exception as e:
+        logger.error(f"Native scrape failed: {e}")
+
+    return f"Could not extract content from {url}.", sources
+
+# =====================================================
+# 5. MODEL ROUTING BY TASK (select_model_by_task)
+# =====================================================
+def select_model_by_task(prompt_text: str, context_text: str = "") -> Dict[str, Any]:
+    """
+    Selects the optimal model and preferred provider by task type.
+    Fallback order remains flexible and covers all available providers.
+    """
+    clean_p = prompt_text.lower()
+    coding_triggers = {"code", "python", "javascript", "function", "bug", "sql", "html", "css", "class", "script", "api", "regex"}
+    reasoning_triggers = {"explain", "prove", "why", "logic", "calculate", "solve", "math", "analyze", "quiz", "step by step", "compare"}
+
+    if any(w in clean_p for w in coding_triggers):
+        task = "coding"
+        preferred = "groq"
+    elif len(context_text) > 4000:
+        task = "document_qa"
+        preferred = "gemini"
+    elif any(w in clean_p for w in reasoning_triggers):
+        task = "reasoning"
+        preferred = "gemini"
+    elif context_text:
+        task = "web_research"
+        preferred = "groq"
+    else:
+        task = "general_chat"
+        preferred = "groq"
+
+    model_mapping = {}
+    for prov, conf in PROVIDER_CONFIG.items():
+        if task == "coding":
+            model_mapping[prov] = conf.get("coding_model", conf["default_model"])
+        elif task == "reasoning":
+            model_mapping[prov] = conf.get("reasoning_model", conf["default_model"])
+        elif task == "document_qa":
+            model_mapping[prov] = conf.get("long_context_model", conf["default_model"])
+        else:
+            model_mapping[prov] = conf["default_model"]
+
+    return {
+        "task": task,
+        "preferred_provider": preferred,
+        "provider_models": model_mapping,
+    }
+
+# =====================================================
+# 6. MESSAGE BUILDER & SOURCE FORMATTER
+# =====================================================
+def build_ai_messages(
+    system_prompt: str,
+    managed_messages: List[Dict[str, str]],
+    user_prompt: str,
+    file_context: str = "",
+    external_context: str = "",
+) -> List[Dict[str, str]]:
+    """
+    Assembles OpenAI-compatible messages payload including chat history,
+    document context, and search context.
+    """
+    formatted: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
+
+    # Include recent chat history (last 10 turns to conserve token quota)
+    recent_history = managed_messages[-10:] if len(managed_messages) > 10 else managed_messages
+    for m in recent_history:
+        if m.get("role") in ("user", "assistant") and m.get("content"):
+            formatted.append({"role": m["role"], "content": m["content"]})
+
+    # Build augmented current user prompt
+    augmented_parts = []
+    if file_context.strip():
+        augmented_parts.append(file_context.strip())
+    if external_context.strip():
+        augmented_parts.append(f"=== SEARCH CONTEXT ===\n{external_context.strip()}\n=== END CONTEXT ===")
+    augmented_parts.append(f"User Request:\n{user_prompt}")
+
+    formatted.append({"role": "user", "content": "\n\n".join(augmented_parts)})
+    return formatted
+
+def format_sources(sources_list: List[Dict[str, str]]) -> str:
+    """Formats unique sources into a clean markdown reference list."""
+    if not sources_list:
         return ""
+    seen_urls = set()
+    unique_sources = []
+    for s in sources_list:
+        url = s.get("url", "").strip()
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            title = s.get("title") or url
+            unique_sources.append(f"- [{title}]({url})")
 
-    text = "\n\n**Sources**\n"
-
-    used = set()
-
-    for url in source_list:
-
-        if not url:
-            continue
-
-        if url in used:
-            continue
-
-        used.add(url)
-
-        text += f"- {url}\n"
-
-    return text
-
-
-# =====================================================
-# SAFE TEXT LIMITER
-# =====================================================
-
-def safe_context(
-    text,
-    limit=12000
-):
-
-    if not text:
+    if not unique_sources:
         return ""
-
-    if len(text) <= limit:
-        return text
-
-    return text[:limit]
-
+    return "\n\n---\n**Sources & References:**\n" + "\n".join(unique_sources)
 
 # =====================================================
-# PROVIDER AWARE AI FALLBACK
+# 7. ROBUST PROVIDER FALLBACK WITH HTTP SSE STREAMING
 # =====================================================
+def _stream_openai_compatible(
+    provider_key: str,
+    api_key: str,
+    model: str,
+    messages: List[Dict[str, str]],
+) -> Generator[str, None, None]:
+    """
+    Unified, low-latency Server-Sent Events (SSE) streaming engine.
+    Works natively across Groq, Gemini, Mistral, and OpenRouter without heavy SDKs.
+    """
+    conf = PROVIDER_CONFIG[provider_key]
+    url = conf["base_url"]
 
-def provider_aware_ai_fallback(keys_dict, router_info, messages, max_tokens=4096):
-    default_temp = 0.5
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    if provider_key == "openrouter":
+        headers["HTTP-Referer"] = "https://anis-ai.streamlit.app"
+        headers["X-Title"] = "Anis AI"
 
-    preferred_provider = router_info["provider"]
-    preferred_model = router_info["model"]
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "temperature": 0.7,
+    }
 
-    # Prioritize Gemini as the primary provider for AI calls, keep others as fallbacks
-    providers_order = [
-        "gemini",
-        preferred_provider,
-        "groq",
-        "mistral",
-        "openrouter",
-    ]
+    # 5s connection timeout, 35s stream read timeout
+    response = http_session.post(
+        url,
+        headers=headers,
+        json=payload,
+        stream=True,
+        timeout=(5.0, 35.0),
+    )
 
-    # Remove duplicates while preserving order
-    providers_order = list(dict.fromkeys(providers_order))
+    if response.status_code != 200:
+        error_sample = response.text[:250]
+        response.close()
+        raise requests.HTTPError(
+            f"{provider_key} returned status {response.status_code}: {error_sample}",
+            response=response,
+        )
 
-    for provider in providers_order:
-
-        # ---------------- GROQ ----------------
-        if provider == "groq" and keys_dict.get("groq"):
+    for line in response.iter_lines(decode_unicode=True):
+        if not line:
+            continue
+        if line.startswith("data: "):
+            data_str = line[6:].strip()
+            if data_str == "[DONE]":
+                break
             try:
-                client = Groq(
-                    api_key=keys_dict["groq"],
-                    timeout=8,
-                    max_retries=0,
-                )
+                data_json = json.loads(data_str)
+                choices = data_json.get("choices", [])
+                if choices:
+                    delta = choices[0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        yield content
+            except json.JSONDecodeError:
+                continue
 
-                model_name = (
-                    preferred_model
-                    if preferred_provider == "groq"
-                    else "llama-3.3-70b-versatile"
-                )
+    response.close()
 
-                completion = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=default_temp,
-                    max_completion_tokens=max_tokens,
-                    stream=True,
-                )
 
-                for chunk in completion:
-                    if (
-                        chunk.choices
-                        and chunk.choices[0].delta
-                        and chunk.choices[0].delta.content
-                    ):
-                        yield chunk.choices[0].delta.content
-                return
+def provider_aware_ai_fallback(
+    keys_dict: Dict[str, str],
+    router_info: Dict[str, Any],
+    messages: List[Dict[str, str]],
+) -> Generator[str, None, None]:
+    """
+    Primary provider -> (Transient error? brief retry) -> Next configured provider -> ...
+    Yields 'ERROR_ALL_FAILED' ONLY when every usable provider has failed.
+    """
+    preferred = router_info.get("preferred_provider", "groq")
+    all_providers = ["groq", "gemini", "mistral", "openrouter"]
 
-            except Exception as e:
-                print("GROQ Error:", e)
-                pass
+    # Reorder according to preferred provider
+    candidate_order = [preferred] + [p for p in all_providers if p != preferred]
 
-        # ---------------- GEMINI ----------------
-        elif provider == "gemini" and keys_dict.get("gemini"):
-            # Implement retries with exponential backoff for rate-limit/network issues
-            max_retries_gemini = 3
-            base_backoff = 1  # seconds
-            gemini_succeeded = False
-
-            for attempt in range(max_retries_gemini):
-                try:
-                    # Configure gemini client
-                    genai.configure(api_key=keys_dict["gemini"])
-
-                    model_name = (
-                        preferred_model if preferred_provider == "gemini" else GEMINI_MODEL
-                    )
-
-                    system_prompt = ""
-                    history = []
-
-                    for msg in messages:
-                        if msg["role"] == "system":
-                            system_prompt = msg["content"]
-                        elif msg["role"] == "user":
-                            history.append(
-                                {
-                                    "role": "user",
-                                    "parts": [msg["content"]],
-                                }
-                            )
-                        elif msg["role"] == "assistant":
-                            history.append(
-                                {
-                                    "role": "model",
-                                    "parts": [msg["content"]],
-                                }
-                            )
-
-                    # Start chat with existing history (exclude last user if we will send it separately)
-                    try:
-                        model = genai.GenerativeModel(model_name)
-                        chat = model.start_chat(history=history[:-1])
-
-                        response = chat.send_message(
-                            system_prompt + "\n\n" + messages[-1]["content"],
-                            stream=True,
-                        )
-
-                        for chunk in response:
-                            # chunk may have .text depending on the gh package version
-                            if getattr(chunk, "text", None):
-                                yield chunk.text
-                            elif getattr(chunk, "delta", None) and getattr(chunk.delta, "content", None):
-                                yield chunk.delta.content
-
-                        gemini_succeeded = True
-                        return
-                    except Exception as inner_e:
-                        # Some versions of google-generativeai may not support GenerativeModel API.
-                        # Fallback to a simpler generate call: combine into one prompt and request a single response.
-                        print("Gemini chat streaming not available or error occurred:", inner_e)
-                        combined_prompt = system_prompt + "\n\n" + messages[-1]["content"]
-                        try:
-                            resp = genai.generate(
-                                model=model_name,
-                                prompt=combined_prompt,
-                                max_output_tokens=max_tokens,
-                                temperature=default_temp,
-                            )
-                            # resp may have .text or .output
-                            text = ""
-                            if getattr(resp, "text", None):
-                                text = resp.text
-                            elif isinstance(resp, dict):
-                                # older/newer clients might return dict
-                                text = resp.get("output", "") or resp.get("candidates", [{}])[0].get("content", "")
-                            else:
-                                text = str(resp)
-
-                            if text:
-                                yield text
-                                gemini_succeeded = True
-                                return
-
-                        except Exception as gen_err:
-                            # Check for rate limit hints in the error message
-                            msg = str(gen_err).lower()
-                            print("Gemini generate fallback error:", gen_err)
-                            if "rate" in msg or "limit" in msg or isinstance(gen_err, RequestException):
-                                # transient issue: retry with backoff
-                                sleep_time = base_backoff * (2 ** attempt)
-                                print(f"Gemini rate/limit/network issue, retrying in {sleep_time}s (attempt {attempt+1}/{max_retries_gemini})")
-                                time.sleep(sleep_time)
-                                continue
-                            else:
-                                # non-retryable error: break and let other providers try
-                                break
-
-                except RequestException as re:
-                    print("Gemini Request Error:", re)
-                    # Transient network issue: retry with exponential backoff
-                    sleep_time = base_backoff * (2 ** attempt)
-                    print(f"Gemini RequestException, retrying in {sleep_time}s (attempt {attempt+1}/{max_retries_gemini})")
-                    time.sleep(sleep_time)
-                    continue
-                except Exception as e:
-                    # Generic exception: decide whether to retry
-                    msg = str(e).lower()
-                    print("Gemini Error:", e)
-                    if "rate" in msg or "limit" in msg or "429" in msg:
-                        sleep_time = base_backoff * (2 ** attempt)
-                        print(f"Gemini rate limit detected, retrying in {sleep_time}s (attempt {attempt+1}/{max_retries_gemini})")
-                        time.sleep(sleep_time)
-                        continue
-                    else:
-                        # non-retryable, break
-                        break
-
-            if not gemini_succeeded:
-                print("Gemini attempts exhausted or failed, moving to next provider.")
-                pass
-
-        # ---------------- MISTRAL ----------------
-        elif provider == "mistral" and keys_dict.get("mistral"):
-            try:
-                client = OpenAI(
-                    api_key=keys_dict["mistral"],
-                    base_url="https://api.mistral.ai/v1",
-                    timeout=8,
-                    max_retries=0,
-                )
-
-                completion = client.chat.completions.create(
-                    model="mistral-small-latest",
-                    messages=messages,
-                    temperature=default_temp,
-                    max_tokens=max_tokens,
-                    stream=True,
-                )
-
-                for chunk in completion:
-                    if (
-                        chunk.choices
-                        and chunk.choices[0].delta
-                        and chunk.choices[0].delta.content
-                    ):
-                        yield chunk.choices[0].delta.content
-                return
-
-            except Exception as e:
-                print("Mistral Error:", e)
-                pass
-
-        # ---------------- OPENROUTER ----------------
-        elif provider == "openrouter" and keys_dict.get("openrouter"):
-            try:
-                client = OpenAI(
-                    api_key=keys_dict["openrouter"],
-                    base_url="https://openrouter.ai/api/v1",
-                    timeout=8,
-                    max_retries=0,
-                )
-
-                model_name = (
-                    preferred_model
-                    if preferred_provider == "openrouter"
-                    else "mistralai/mistral-small-3.2-24b-instruct:free"
-                )
-
-                completion = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=default_temp,
-                    max_tokens=max_tokens,
-                    stream=True,
-                )
-
-                for chunk in completion:
-                    if (
-                        chunk.choices
-                        and chunk.choices[0].delta
-                        and chunk.choices[0].delta.content
-                    ):
-                        yield chunk.choices[0].delta.content
-                return
-
-            except Exception as e:
-                print("OpenRouter Error:", e)
-                pass
-
-    yield "ERROR_ALL_FAILED"
+    # Filter strictly to providers that have an API key configured
+    active_providers = [p for p in candidate_order if keys_d
