@@ -504,15 +504,17 @@ def provider_aware_ai_fallback(
 
     # Reorder according to preferred provider
     candidate_order = [preferred] + [p for p in all_providers if p != preferred]
+    
+# Filter strictly to providers that have an API key
+active_providers = [
+    p for p in candidate_order
+    if p in keys_dict and keys_dict[p] and keys_dict[p].strip()
+]
 
-    # Filter strictly to providers that have an API key configured
-active_providers = [p for p in candidate_order if keys_dict.get(p, "").strip()]
-
-    if not active_providers:
-        logger.error("[AI] No valid AI provider API keys configured.")
-        yield "ERROR_ALL_FAILED"
-        return
-
+if not active_providers:
+    logger.error("[AI] No valid AI providers available")
+    yield "ERROR_ALL_FAILED"
+    return
     total_candidates = len(active_providers)
     success = False
 
