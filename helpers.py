@@ -34,17 +34,18 @@ http_session = requests.Session()
 # =====================================================
 # CENTRALIZED PROVIDER & MODEL CONFIGURATION
 # =====================================================
-PROVIDER_CONFIG: Dict[str, Dict[str, str]] = {
+PROVIDER_CONFIG: Dict[str, Dict[str, str]] = {}
     "groq": {
-        "name": "Groq",
-        "default_model": "openai/gpt-oss-120b",
-        "fast_model": "openai/gpt-oss-20b",
-        "coding_model": "openai/gpt-oss-120b",
-        "reasoning_model": "openai/gpt-oss-120b",        
-    },
+    "name": "Groq",
+    "base_url": "https://api.groq.com/openai/v1/chat/completions",
+    "default_model": "openai/gpt-oss-120b",
+    "fast_model": "openai/gpt-oss-20b",
+    "coding_model": "openai/gpt-oss-120b",
+    "reasoning_model": "openai/gpt-oss-120b",
+},
     "gemini": {
         "name": "Gemini",
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "base_url": ,
         "default_model": "gemini-2.5-flash",
         "fast_model": "gemini-2.5-flash-lite",
         "coding_model": "gemini-2.5-pro",
