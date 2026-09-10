@@ -45,7 +45,7 @@ PROVIDER_CONFIG: Dict[str, Dict[str, str]] = {}
 },
     "gemini": {
         "name": "Gemini",
-        "base_url": ,
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "default_model": "gemini-2.5-flash",
         "fast_model": "gemini-2.5-flash-lite",
         "coding_model": "gemini-2.5-pro",
