@@ -35,7 +35,7 @@ http_session = requests.Session()
 # CENTRALIZED PROVIDER & MODEL CONFIGURATION
 # =====================================================
 PROVIDER_CONFIG: Dict[str, Dict[str, str]] = {}
-    "groq": {
+ "groq": {
     "name": "Groq",
     "base_url": "https://api.groq.com/openai/v1/chat/completions",
     "default_model": "openai/gpt-oss-120b",
