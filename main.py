@@ -4,37 +4,31 @@
 
 import streamlit as st
 import time
-import base64
-from PIL import ImageFile
+from PIL import Image, ImageDraw
 from helpers import (
     get_ai_response,
     MODEL_DISPLAY_NAMES,
 )
 
-# Pillow যাতে কোনো ব্রোকেন ডাটাতে ক্র্যাশ না করে
-ImageFile.LOAD_TRUNCATED_IMAGES = True
+# ===== কোনো ফাইল বা নষ্ট Base64 ছাড়াই মেমোরিতে প্রিমিয়াম লোগো তৈরি =====
+def create_app_logo():
+    # ১২৮x১২৮ সাইজের ট্রান্সপারেন্ট ক্যানভাস
+    img = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # গাঢ় নীল-কালো রাউন্ডেড ব্যাকগ্রাউন্ড
+    draw.rounded_rectangle([(4, 4), (124, 124)], radius=32, fill=(15, 23, 42))
+    # অ্যানিস এআই-এর নীল রঙের আউটার গ্লো
+    draw.ellipse([(28, 28), (100, 100)], fill=(79, 168, 255))
+    # ভেতরের বেগুনি কোর
+    draw.ellipse([(44, 44), (84, 84)], fill=(124, 92, 255))
+    return img
 
-# ===== একটি ১০০% ভ্যালিড ডেমো ব্লু লোগো Base64 (এখানে আপনার আসল লোগোর base64 বসাতে পারেন) =====
-LOGO_BASE64 = """
-iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAAP1BMVEUAAED/78f/99v/9tP/9tf/997/99b/99T/8s7/
-7cf/7sf/7cb/7sj/8s3/8tD/887/78f/8c3/8s7/99b/9df/88/4Yy1dAAAAFnRSTlMA9d3e8e7m
-6+rh59/e29XNw8K9ubSvnmXWzgAAAWNJREFUeNrt2ltugzAURuFfAiGkQIBAyP2v0a0UVepW1R56
-Z+17A1myxUdHtpjHGBsbGxsbGxsbGxsbGxsbGxubH4wxZp/fQ9gQcQz39hIqQhziub2Ej3COy/YQ
-FUIc21t4CJc2q1sId/gLgS38hMAWfkJgCz8hsIWfENjCTwhs4ScEtvATAlv4CYEt/ITAFn5CYAs/
-IbCFnxDYwk8IbOEnBLbwEwJb+AmBLfyEwBZ+QmALP+ENPOGqPQeN4f5OQOPY/jUcw5m3hz+bFwS2
-8BMCW/gJgS38hMAWfkJgCz8hsIWfENjCTwhs4ScEtvATAlv4CYEt/ITAFn5CYAs/IbCFnxDYwk8I
-bOEnBLbwEwJb+AmBLfyEwBZ+QmALP+ENPOGe3gPEsWf3cAyf+f5/b+8hhDje20sohN7eQkQYw7O9
-hYcwhmd7Ch3C8K+/hG284q+B7W1sbGxsbGxsbGxsbGxsbGxsnukD2xU4q8h66S4AAAAASUVORK5C
-YII=
-"""
-
-# BytesIO ছাড়া সরাসরি raw bytes হিসেবে রাখুন (এতে কার্সার সমস্যা হবে না)
-IMAGE_BYTES = base64.b64decode(LOGO_BASE64.strip())
+LOGO_IMAGE = create_app_logo()
 
 # ===== পেজ কনফিগারেশন =====
 st.set_page_config(
     page_title="Anis Ai",
-    page_icon=IMAGE_BYTES,
+    page_icon=LOGO_IMAGE,       # সরাসরি PIL ইমেজ ব্যবহার করা হয়েছে
     layout="wide",
     initial_sidebar_state="expanded",
 )
