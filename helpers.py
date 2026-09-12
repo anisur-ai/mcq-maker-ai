@@ -1,7 +1,9 @@
-# ============================================
-# helper.py — PART 1 START
-# (এই পার্টটা ফাইলের একদম শুরুতে বসাবেন)
-# ============================================
+"""
+================================================================================
+                    ANIA AI - ENTERPRISE BACKEND (helpers.py)
+                                [ PART 1 / 4 ]
+================================================================================
+"""
 
 import os
 import time
@@ -9,10 +11,12 @@ import requests
 import concurrent.futures
 from dotenv import load_dotenv
 
-# .env ফাইল থেকে সব key লোড হচ্ছে
+# .env থেকে সব API Key লোড করা
 load_dotenv()
 
-# ===== সব API KEY লোড করা হচ্ছে =====
+# ==============================================================================
+# 1. API KEYS CONFIGURATION
+# ==============================================================================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
@@ -27,7 +31,7 @@ STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 
-# ===== ব্র্যান্ডেড মডেল নেম ম্যাপিং (ইউজারকে যা দেখানো হবে) =====
+# ডিসপ্লে নেইম ম্যাপিং
 MODEL_DISPLAY_NAMES = {
     "gemini": "Anis 1.0 Flash",
     "groq": "Anis 1.0 Turbo",
@@ -36,47 +40,37 @@ MODEL_DISPLAY_NAMES = {
     "openrouter": "Anis 1.2 Pro",
 }
 
-# ===== টাইমআউট রেপার ফাংশন (প্রতিটা প্রোভাইডারে ২ সেকেন্ড লিমিট) =====
-def call_with_timeout(func, *args, timeout=2, **kwargs):
-    """
-    এই ফাংশনটা কোনো একটা provider ফাংশনকে কল করে,
-    কিন্তু timeout সেকেন্ডের বেশি সময় নিলে সেটা বাতিল করে
-    None রিটার্ন করবে (তখন পরের provider ট্রাই হবে)
-    """
+# ==============================================================================
+# 2. TIMEOUT WRAPPER
+# ==============================================================================
+def call_with_timeout(func, *args, timeout=6, **kwargs):
+    """ধীরগতির API-কে আটকে না রেখে দ্রুত পরবর্তী প্রোভাইডারে শিফট করে"""
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(func, *args, **kwargs)
         try:
-            result = future.result(timeout=timeout)
-            return result
+            return future.result(timeout=timeout)
         except concurrent.futures.TimeoutError:
-            print(f"[TIMEOUT] {func.__name__} {timeout} সেকেন্ডে রেসপন্স দেয়নি")
+            print(f"[TIMEOUT] {func.__name__} {timeout}s সময়সীমা পার হয়েছে")
             return None
         except Exception as e:
-            print(f"[ERROR] {func.__name__} এরর দিয়েছে: {e}")
+            print(f"[API ERROR] {func.__name__} ব্যর্থ হয়েছে: {e}")
             return None
+# ==============================================================================
+#                                [ PART 2 / 4 ]
+# ==============================================================================
 
-# ============================================
-# helper.py — PART 1 END
-# (এর নিচে পরের পার্ট জোড়া দেবেন)
-# ============================================
-# ============================================
-# helper.py — PART 2 START
-# (Part 1-এর ঠিক নিচে জোড়া দেবেন)
-# ============================================
-
-# ===== 1. GEMINI প্রোভাইডার =====
+# ==============================================================================
+# 3. LLM API PROVIDERS
+# ==============================================================================
 def call_gemini(prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
-    }
-    response = requests.post(url, json=payload, timeout=5)
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    response = requests.post(url, json=payload, timeout=8)
     response.raise_for_status()
     data = response.json()
     return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
-# ===== 2. GROQ প্রোভাইডার =====
 def call_groq(prompt):
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
@@ -87,13 +81,12 @@ def call_groq(prompt):
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}]
     }
-    response = requests.post(url, json=payload, headers=headers, timeout=5)
+    response = requests.post(url, json=payload, headers=headers, timeout=8)
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"]
 
 
-# ===== 3. CEREBRAS প্রোভাইডার =====
 def call_cerebras(prompt):
     url = "https://api.cerebras.ai/v1/chat/completions"
     headers = {
@@ -104,13 +97,12 @@ def call_cerebras(prompt):
         "model": "llama-3.3-70b",
         "messages": [{"role": "user", "content": prompt}]
     }
-    response = requests.post(url, json=payload, headers=headers, timeout=5)
+    response = requests.post(url, json=payload, headers=headers, timeout=8)
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"]
 
 
-# ===== 4. MISTRAL প্রোভাইডার =====
 def call_mistral(prompt):
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {
@@ -121,13 +113,12 @@ def call_mistral(prompt):
         "model": "mistral-small-latest",
         "messages": [{"role": "user", "content": prompt}]
     }
-    response = requests.post(url, json=payload, headers=headers, timeout=5)
+    response = requests.post(url, json=payload, headers=headers, timeout=8)
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"]
 
 
-# ===== 5. OPENROUTER প্রোভাইডার =====
 def call_openrouter(prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -138,24 +129,17 @@ def call_openrouter(prompt):
         "model": "meta-llama/llama-3.3-70b-instruct:free",
         "messages": [{"role": "user", "content": prompt}]
     }
-    response = requests.post(url, json=payload, headers=headers, timeout=5)
+    response = requests.post(url, json=payload, headers=headers, timeout=8)
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"]
 
-# ============================================
-# helper.py — PART 2 END
-# (এর নিচে পরের পার্ট জোড়া দেবেন)
-# ============================================
-# ============================================
-# helper.py — PART 3 START (টাস্ক ক্লাসিফায়ার + টেক্সট AI ফলব্যাক চেইন)
-# (Part 2-এর ঠিক নিচে জোড়া দেবেন)
-# ============================================
 
-# ===== টাস্ক ক্লাসিফায়ার: মেসেজ দেখে ক্যাটেগরি বোঝা =====
+# ==============================================================================
+# 4. TASK CLASSIFICATION & FALLBACK CHAINS
+# ==============================================================================
 def classify_task(message):
     text = message.lower()
-
     code_keywords = ["code", "```", "function", "error", "python", "fix", "bug", "script", "কোড", "প্রোগ্রাম"]
     reasoning_keywords = ["calculate", "solve", "logic", "গণনা", "সমাধান", "+", "-", "="]
     search_keywords = ["latest", "today", "news", "current", "এখন", "আজ", "সাম্প্রতিক", "খবর"]
@@ -170,7 +154,6 @@ def classify_task(message):
         return "general"
 
 
-# ===== প্রতিটা ক্যাটেগরির জন্য প্রোভাইডার চেইন (ক্রম অনুযায়ী) =====
 TEXT_AI_CHAINS = {
     "code": [
         ("cerebras", call_cerebras),
@@ -195,39 +178,28 @@ TEXT_AI_CHAINS = {
 }
 
 
-# ===== মূল ফলব্যাক চেইন রানার (২ সেকেন্ড টাইমআউট প্রতিটায়) =====
 def run_text_ai_chain(prompt, task_type="general"):
     chain = TEXT_AI_CHAINS.get(task_type, TEXT_AI_CHAINS["general"])
 
     for provider_key, provider_func in chain:
-        result = call_with_timeout(provider_func, prompt, timeout=2)
+        result = call_with_timeout(provider_func, prompt, timeout=6)
         if result:
-            return {
-                "answer": result,
-                "provider_used": provider_key
-            }
+            return {"answer": result, "provider_used": provider_key}
 
-    return {
-        "answer": "⚠️ এই মুহূর্তে কোনো AI সার্ভিস উত্তর দিতে পারছে না। একটু পরে চেষ্টা করুন।",
-        "provider_used": None
-    }
+    return {"answer": None, "provider_used": None}
+# ==============================================================================
+#                                [ PART 3 / 4 ]
+# ==============================================================================
 
-# ============================================
-# helper.py — PART 3 END
-# ============================================
-
-
-# ============================================
-# helper.py — PART 4 START (ওয়েব সার্চ ফলব্যাক: Tavily → Serper)
-# ============================================
-
+# ==============================================================================
+# 5. LIVE SEARCH & SCRAPING
+# ==============================================================================
 def call_tavily(query):
     url = "https://api.tavily.com/search"
-    payload = {"api_key": TAVILY_API_KEY, "query": query, "max_results": 5}
-    response = requests.post(url, json=payload, timeout=5)
+    payload = {"api_key": TAVILY_API_KEY, "query": query, "max_results": 4}
+    response = requests.post(url, json=payload, timeout=6)
     response.raise_for_status()
-    data = response.json()
-    results = data.get("results", [])
+    results = response.json().get("results", [])
     combined = "\n".join([f"- {r.get('title')}: {r.get('content','')[:200]}" for r in results])
     return combined if combined else None
 
@@ -236,36 +208,27 @@ def call_serper(query):
     url = "https://google.serper.dev/search"
     headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
     payload = {"q": query}
-    response = requests.post(url, json=payload, headers=headers, timeout=5)
+    response = requests.post(url, json=payload, headers=headers, timeout=6)
     response.raise_for_status()
-    data = response.json()
-    organic = data.get("organic", [])
-    combined = "\n".join([f"- {r.get('title')}: {r.get('snippet','')}" for r in organic[:5]])
+    organic = response.json().get("organic", [])
+    combined = "\n".join([f"- {r.get('title')}: {r.get('snippet','')}" for r in organic[:4]])
     return combined if combined else None
 
 
 def run_web_search(query):
     chain = [("tavily", call_tavily), ("serper", call_serper)]
     for provider_key, provider_func in chain:
-        result = call_with_timeout(provider_func, query, timeout=2)
+        result = call_with_timeout(provider_func, query, timeout=4)
         if result:
             return result
     return None
 
-# ============================================
-# helper.py — PART 4 END
-# ============================================
-
-
-# ============================================
-# helper.py — PART 5 START (স্ক্র্যাপিং ফলব্যাক: Firecrawl → Jina, OCR, ছবি জেনারেশন)
-# ============================================
 
 def call_firecrawl(url_to_scrape):
     api_url = "https://api.firecrawl.dev/v1/scrape"
     headers = {"Authorization": f"Bearer {FIRECRAWL_API_KEY}", "Content-Type": "application/json"}
     payload = {"url": url_to_scrape}
-    response = requests.post(api_url, json=payload, headers=headers, timeout=5)
+    response = requests.post(api_url, json=payload, headers=headers, timeout=8)
     response.raise_for_status()
     data = response.json()
     return data.get("data", {}).get("markdown")
@@ -274,7 +237,7 @@ def call_firecrawl(url_to_scrape):
 def call_jina(url_to_scrape):
     api_url = f"https://r.jina.ai/{url_to_scrape}"
     headers = {"Authorization": f"Bearer {JINA_API_KEY}"}
-    response = requests.get(api_url, headers=headers, timeout=5)
+    response = requests.get(api_url, headers=headers, timeout=8)
     response.raise_for_status()
     return response.text
 
@@ -282,22 +245,23 @@ def call_jina(url_to_scrape):
 def run_scrape(url_to_scrape):
     chain = [("firecrawl", call_firecrawl), ("jina", call_jina)]
     for provider_key, provider_func in chain:
-        result = call_with_timeout(provider_func, url_to_scrape, timeout=2)
+        result = call_with_timeout(provider_func, url_to_scrape, timeout=5)
         if result:
             return result
     return None
 
-
+# ==============================================================================
+# 6. OCR, IMAGE GEN, VOICE & AUDIO
+# ==============================================================================
 def call_ocr(image_bytes):
     url = "https://api.ocr.space/parse/image"
     files = {"file": image_bytes}
     data = {"apikey": OCR_API_KEY, "language": "eng"}
-    response = requests.post(url, files=files, data=data, timeout=5)
+    response = requests.post(url, files=files, data=data, timeout=8)
     response.raise_for_status()
-    result = response.json()
     try:
-        return result["ParsedResults"][0]["ParsedText"]
-    except (KeyError, IndexError):
+        return response.json()["ParsedResults"][0]["ParsedText"]
+    except Exception:
         return None
 
 
@@ -307,30 +271,21 @@ def call_stability_image_gen(prompt):
     files = {"prompt": (None, prompt), "output_format": (None, "png")}
     response = requests.post(url, headers=headers, files=files, timeout=15)
     response.raise_for_status()
-    return response.content  # ছবি বাইনারি ডেটা
+    return response.content
 
-# ============================================
-# helper.py — PART 5 END
-# ============================================
-
-
-# ============================================
-# helper.py — PART 6 START (ভয়েস: ElevenLabs TTS, AssemblyAI STT)
-# ============================================
 
 def call_elevenlabs_tts(text):
-    voice_id = "21m00Tcm4TlvDq8ikWAM"  # ডিফল্ট ভয়েস, চাইলে বদলানো যাবে
+    voice_id = "21m00Tcm4TlvDq8ikWAM"
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
     payload = {"text": text, "model_id": "eleven_multilingual_v2"}
     response = requests.post(url, json=payload, headers=headers, timeout=10)
     response.raise_for_status()
-    return response.content  # অডিও বাইনারি ডেটা
+    return response.content
 
 
 def call_assemblyai_stt(audio_file_path):
     headers = {"authorization": ASSEMBLYAI_API_KEY}
-
     with open(audio_file_path, "rb") as f:
         upload_response = requests.post(
             "https://api.assemblyai.com/v2/upload", headers=headers, data=f, timeout=10
@@ -354,49 +309,62 @@ def call_assemblyai_stt(audio_file_path):
         elif polling["status"] == "error":
             return None
         time.sleep(1)
+# ==============================================================================
+#                                [ PART 4 / 4 ]
+# ==============================================================================
 
-# ============================================
-# helper.py — PART 6 END
-# ============================================
-
-
-# ============================================
-# helper.py — PART 7 START (মূল ফাংশন — main.py এটাকেই কল করবে)
-# ============================================
-
-def get_ai_response(user_message, web_search_enabled=True, image_file=None):
+# ==============================================================================
+# 7. MAIN INTERFACE FUNCTION (Direct Link with main.py)
+# ==============================================================================
+def generate_ai_response(prompt: str, model: str = "default", chat_history: list = None, web_search_enabled: bool = True, image_file=None) -> str:
     """
-    main.py শুধু এই একটা ফাংশনকেই কল করবে।
-    এর ভেতরেই টাস্ক ক্লাসিফিকেশন, ফলব্যাক চেইন, সার্চ — সবকিছু ঘটবে।
+    main.py এর সাথে ১০০% সামঞ্জস্যপূর্ণ মূল ফাংশন।
     """
+    if chat_history is None:
+        chat_history = []
 
-    # যদি ছবি সংযুক্ত থাকে, প্রথমে OCR করে টেক্সট বের করা
+    # ১. ছবি প্রসেসিং (যদি থাকে)
     extra_context = ""
     if image_file is not None:
-        image_bytes = image_file.read()
-        ocr_text = call_with_timeout(call_ocr, image_bytes, timeout=5)
-        if ocr_text:
-            extra_context += f"\n[ছবি থেকে পাওয়া টেক্সট]: {ocr_text}"
+        try:
+            image_bytes = image_file.read()
+            ocr_text = call_with_timeout(call_ocr, image_bytes, timeout=6)
+            if ocr_text:
+                extra_context += f"\n[Image Extracted Context]:\n{ocr_text}"
+        except Exception as e:
+            print(f"[OCR Non-Fatal Error]: {e}")
 
-    # টাস্ক ক্যাটেগরি বোঝা
-    task_type = classify_task(user_message)
+    # ২. টাস্ক ক্লাসিফিকেশন
+    task_type = classify_task(prompt)
 
-    # ওয়েব সার্চ প্রয়োজন হলে ও অন থাকলে
+    # ৩. প্রয়োজন অনুযায়ী রিয়েলটাইম ওয়েব সার্চ
     search_context = ""
     if web_search_enabled and task_type == "search":
-        search_result = run_web_search(user_message)
+        search_result = run_web_search(prompt)
         if search_result:
-            search_context = f"\n[ওয়েব সার্চ থেকে পাওয়া তথ্য]:\n{search_result}"
+            search_context = f"\n[Live Web Search Context]:\n{search_result}"
 
-    # চূড়ান্ত প্রম্পট বানানো (মূল প্রশ্ন + সার্চ কনটেক্সট + ছবির কনটেক্সট)
-    final_prompt = user_message + search_context + extra_context
+    # ৪. পূর্বের চ্যাট হিস্ট্রি প্রম্পটে যুক্ত করা
+    formatted_history = ""
+    if chat_history:
+        recent = chat_history[-6:]
+        history_lines = []
+        for msg in recent:
+            role = "User" if msg.get("role") == "user" else "ANIA AI"
+            history_lines.append(f"{role}: {msg.get('content', '')}")
+        formatted_history = "Conversation History:\n" + "\n".join(history_lines) + "\n\n"
 
-    # টেক্সট AI ফলব্যাক চেইন কল করা
+    # ৫. সম্পূর্ণ প্রম্পট প্রস্তুত করা
+    final_prompt = f"{formatted_history}Current User Query: {prompt}{search_context}{extra_context}"
+
+    # ৬. মাল্টি-প্রোভাইডার ফলব্যাক চেইন এক্সিকিউট করা
     result = run_text_ai_chain(final_prompt, task_type=task_type)
 
-    return result
+    # ৭. রেসপন্স চেক ও এরর রেইজ (ফেইল করলে main.py এর স্পেশাল কার্ড ওপেন হবে)
+    if not result or result.get("provider_used") is None or not result.get("answer"):
+        raise RuntimeError("All internal neural pipelines failed to generate completion.")
 
-# ============================================
-# helper.py — PART 7 END
-# helper.py এখানেই সম্পূর্ণ
-# ============================================
+    return result["answer"]
+
+# অ্যালিয়াস (Backwards Compatibility)
+get_ai_response = generate_ai_response
