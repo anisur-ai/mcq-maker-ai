@@ -165,7 +165,7 @@ with st.sidebar:
 # ===== মেইন এরিয়া হেডার =====
 header_col1, header_col2 = st.columns([1, 8])
 with header_col1:
-    st.image("assets/logo.png", width=45)
+    st.image("00000000f214821191e5c838316e9753.png", width=45)
 with header_col2:
     st.markdown(
         "<div class='anis-title'>Anis Ai</div>",
