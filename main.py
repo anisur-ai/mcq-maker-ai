@@ -103,7 +103,7 @@ with st.sidebar:
     # --- লোগো ও অ্যাপের নাম ---
     col_logo, col_name = st.columns([1, 3])
     with col_logo:
-        st.image("assets/logo.png", width=50)
+        st.image("00000000f214821191e5c838316e9753.png", width=50)
     with col_name:
         st.markdown(
             "<div class='anis-title' style='font-size:22px; margin-top:6px;'>Anis Ai</div>",
