@@ -63,7 +63,7 @@ def call_with_timeout(func, *args, timeout=6, **kwargs):
 # 3. LLM API PROVIDERS
 # ==============================================================================
 def call_gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     response = requests.post(url, json=payload, timeout=8)
     response.raise_for_status()
