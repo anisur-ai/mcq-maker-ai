@@ -3,7 +3,7 @@
                     ANIA AI - ENTERPRISE NEURAL INTERFACE
 ================================================================================
 Core Application Entry Point
-Architecture : Streamlit UI + Custom Backend Engine (helper.py)
+Architecture : Streamlit UI + Custom Backend Engine (helpers.py)
 Features     : Dynamic Textarea Growth, Version Switching, Neural Error Cards
 ================================================================================
 """
@@ -13,12 +13,12 @@ import time
 import sys
 
 # ==============================================================================
-# 1. CORE BACKEND IMPORT (helper.py)
+# 1. CORE BACKEND IMPORT (helpers.py)
 # ==============================================================================
 try:
-    from helper import generate_ai_response
+    from helpers import generate_ai_response
 except ImportError:
-    st.error("⚠️ Critical Error: `helper.py` module not detected in the working directory.")
+    st.error("⚠️ Critical Error: `helpers.py` module not detected in the working directory.")
     sys.exit(1)
 
 # ==============================================================================
