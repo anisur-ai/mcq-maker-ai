@@ -5,7 +5,7 @@
 import streamlit as st
 import time
 import base64
-from helper import (
+from helpers import (
     get_ai_response,
     MODEL_DISPLAY_NAMES,
 )
