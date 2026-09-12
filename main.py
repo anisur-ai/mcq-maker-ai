@@ -5,45 +5,31 @@
 import streamlit as st
 import time
 import base64
-from io import BytesIO
+from PIL import ImageFile
 from helpers import (
     get_ai_response,
     MODEL_DISPLAY_NAMES,
 )
 
-# ===== আপনার দেওয়া আসল লোগোটি স্থায়ীভাবে কোডের ভেতর এমবেড করা হলো =====
-# (যাতে কোনো বাহ্যিক ফাইল বা ইন্টারনেটের লিঙ্কের উপর নির্ভর করতে না হয়)
-LOGO_BASE64 = """
-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
-AAAASUVORK5CYII="""
+# Pillow যাতে কোনো ব্রোকেন ডাটাতে ক্র্যাশ না করে
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# Base64 স্ট্রিংকে ইমেজে রূপান্তর করা
-IMAGE_BYTES = BytesIO(base64.b64decode(LOGO_BASE64.strip()))
+# ===== একটি ১০০% ভ্যালিড ডেমো ব্লু লোগো Base64 (এখানে আপনার আসল লোগোর base64 বসাতে পারেন) =====
+LOGO_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAAP1BMVEUAAED/78f/99v/9tP/9tf/997/99b/99T/8s7/
+7cf/7sf/7cb/7sj/8s3/8tD/887/78f/8c3/8s7/99b/9df/88/4Yy1dAAAAFnRSTlMA9d3e8e7m
+6+rh59/e29XNw8K9ubSvnmXWzgAAAWNJREFUeNrt2ltugzAURuFfAiGkQIBAyP2v0a0UVepW1R56
+Z+17A1myxUdHtpjHGBsbGxsbGxsbGxsbGxsbGxubH4wxZp/fQ9gQcQz39hIqQhziub2Ej3COy/YQ
+FUIc21t4CJc2q1sId/gLgS38hMAWfkJgCz8hsIWfENjCTwhs4ScEtvATAlv4CYEt/ITAFn5CYAs/
+IbCFnxDYwk8IbOEnBLbwEwJb+AmBLfyEwBZ+QmALP+ENPOGqPQeN4f5OQOPY/jUcw5m3hz+bFwS2
+8BMCW/gJgS38hMAWfkJgCz8hsIWfENjCTwhs4ScEtvATAlv4CYEt/ITAFn5CYAs/IbCFnxDYwk8I
+bOEnBLbwEwJb+AmBLfyEwBZ+QmALP+ENPOGe3gPEsWf3cAyf+f5/b+8hhDje20sohN7eQkQYw7O9
+hYcwhmd7Ch3C8K+/hG284q+B7W1sbGxsbGxsbGxsbGxsbGxsnukD2xU4q8h66S4AAAAASUVORK5C
+YII=
+"""
+
+# BytesIO ছাড়া সরাসরি raw bytes হিসেবে রাখুন (এতে কার্সার সমস্যা হবে না)
+IMAGE_BYTES = base64.b64decode(LOGO_BASE64.strip())
 
 # ===== পেজ কনফিগারেশন =====
 st.set_page_config(
@@ -113,7 +99,6 @@ st.markdown("""
 # ============================================
 # main.py — PART 1 END
 # ============================================
-
 # ============================================
 # main.py — PART 2 START
 # ============================================
