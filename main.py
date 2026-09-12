@@ -1,6 +1,6 @@
 """
 ================================================================================
-                    ANIA AI - ENTERPRISE NEURAL INTERFACE
+                    ANIS AI - ENTERPRISE NEURAL INTERFACE
 ================================================================================
 Core Application Entry Point
 Architecture : Streamlit UI + Custom Backend Engine (helpers.py)
@@ -25,7 +25,7 @@ except ImportError:
 # 2. PAGE CONFIGURATION & METADATA
 # ==============================================================================
 st.set_page_config(
-    page_title="ANIA AI — Next-Gen Intelligence",
+    page_title="ANIS AI — Next-Gen Intelligence",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -121,7 +121,7 @@ if "messages" not in st.session_state:
 # 5. SIDEBAR ENGINE CONTROLS
 # ==============================================================================
 with st.sidebar:
-    st.markdown('<div class="ania-brand-title" style="font-size: 1.8rem;">⚡ ANIA AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="anis-brand-title" style="font-size: 1.8rem;">⚡ ANIS AI</div>', unsafe_allow_html=True)
     st.caption("Enterprise AI Control Center")
     st.divider()
 
@@ -129,9 +129,9 @@ with st.sidebar:
     selected_version = st.selectbox(
         "Select Engine Release:",
         options=[
-            "ANIA Core v1.2+ (High Throughput)",
-            "ANIA Neural v1.3+ (Advanced Reasoning)",
-            "ANIA Quantum v2.0+ (Pro Multimodal)"
+            "Anis Core v1.2+ (High Throughput)",
+            "Anis Neural v1.3+ (Advanced Reasoning)",
+            "Anis Quantum v2.0+ (Pro Multimodal)"
         ],
         index=1,
         help="Select the internal neural processing version for ANIA AI."
@@ -161,8 +161,8 @@ with st.sidebar:
 col_head1, col_head2 = st.columns([3.5, 1.5])
 
 with col_head1:
-    st.markdown('<div class="ania-brand-title">⚡ ANIA AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="ania-brand-subtitle">High-Performance Autonomous Neural System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="anis-brand-title">⚡ ANIS AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="anis-brand-subtitle">High-Performance Autonomous Neural System</div>', unsafe_allow_html=True)
 
 with col_head2:
     st.markdown(f"""
@@ -194,7 +194,7 @@ if user_prompt := st.chat_input("Message ANIA AI... (Auto-expands on multiline t
     with st.chat_message("assistant", avatar="✨"):
         response_container = st.empty()
         
-        with st.spinner(f"ANIA Neural Core is computing..."):
+        with st.spinner(f"ANIS Neural Core is computing..."):
             start_clock = time.time()
             try:
                 # Backend delegation to helper.py
