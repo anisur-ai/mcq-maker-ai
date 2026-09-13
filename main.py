@@ -16,7 +16,7 @@ from helpers import (
     run_web_search,
     call_gemini,
     call_groq,
-    call_cerebras,
+    call_cloudflare,
     call_mistral,
     call_openrouter,
 )
