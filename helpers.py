@@ -48,7 +48,7 @@ CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b"
 
 MISTRAL_MODEL = "mistral-small-latest"
 
-OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+OPENROUTER_MODEL = "qwen/qwen3-next-80b-a3b-instruct:free"
 
 
 # ==============================================================================
