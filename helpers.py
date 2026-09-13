@@ -44,7 +44,7 @@ GEMINI_MODEL = "gemini-3.6-flash"
 
 GROQ_MODEL = "openai/gpt-oss-120b"
 
-CLOUDFLARE_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b"
 
 MISTRAL_MODEL = "mistral-small-latest"
 
