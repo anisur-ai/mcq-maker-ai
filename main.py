@@ -482,12 +482,12 @@ if user_prompt:
 
 
             # ------------------------------------------------------------------
-            # Cerebras
+            # Cloudflare 
             # ------------------------------------------------------------------
 
             elif "Anis 3.3 Ultra Speed" in selected_engine:
 
-                result_text = call_cerebras(
+                result_text = call_cloudflare(
                     final_prompt
                 )
 
