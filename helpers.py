@@ -1,7 +1,7 @@
 """
 ================================================================================
-                    ANIA AI - ENTERPRISE BACKEND (helpers.py)
-                                [ PART 1 / 4 ]
+                    ANIS AI - ENTERPRISE BACKEND
+                         helpers.py - PART 1/2
 ================================================================================
 """
 
@@ -11,27 +11,49 @@ import requests
 import concurrent.futures
 from dotenv import load_dotenv
 
-# .env থেকে সব API Key লোড করা
 load_dotenv()
 
+
 # ==============================================================================
-# 1. API KEYS CONFIGURATION
+# 1. API KEYS
 # ==============================================================================
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY")
 JINA_API_KEY = os.getenv("JINA_API_KEY")
+
 OCR_API_KEY = os.getenv("OCR_API_KEY")
 STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 
-# ডিসপ্লে নেইম ম্যাপিং
+
+# ==============================================================================
+# 2. MODEL CONFIGURATION
+# ==============================================================================
+
+GEMINI_MODEL = "gemini-2.5-flash"
+
+GROQ_MODEL = "openai/gpt-oss-120b"
+
+CEREBRAS_MODEL = "llama-3.3-70b"
+
+MISTRAL_MODEL = "mistral-small-latest"
+
+OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+
+
+# ==============================================================================
+# 3. DISPLAY NAMES
+# ==============================================================================
+
 MODEL_DISPLAY_NAMES = {
     "gemini": "Anis 1.0 Flash",
     "groq": "Anis 1.0 Turbo",
@@ -40,331 +62,1308 @@ MODEL_DISPLAY_NAMES = {
     "openrouter": "Anis 1.2 Pro",
 }
 
+
 # ==============================================================================
-# 2. TIMEOUT WRAPPER
+# 4. TIMEOUT WRAPPER
 # ==============================================================================
-def call_with_timeout(func, *args, timeout=6, **kwargs):
-    """ধীরগতির API-কে আটকে না রেখে দ্রুত পরবর্তী প্রোভাইডারে শিফট করে"""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(func, *args, **kwargs)
+
+def call_with_timeout(func, *args, timeout=10, **kwargs):
+
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=1
+    ) as executor:
+
+        future = executor.submit(
+            func,
+            *args,
+            **kwargs
+        )
+
         try:
-            return future.result(timeout=timeout)
+
+            result = future.result(
+                timeout=timeout
+            )
+
+            if (
+                result
+                and isinstance(result, str)
+                and result.strip()
+            ):
+                return result.strip()
+
+            print(
+                f"[EMPTY RESPONSE] "
+                f"{func.__name__}"
+            )
+
+            return None
+
         except concurrent.futures.TimeoutError:
-            print(f"[TIMEOUT] {func.__name__} {timeout}s সময়সীমা পার হয়েছে")
+
+            print(
+                f"[TIMEOUT] "
+                f"{func.__name__} "
+                f"exceeded {timeout}s"
+            )
+
             return None
+
         except Exception as e:
-            print(f"[API ERROR] {func.__name__} ব্যর্থ হয়েছে: {e}")
+
+            print(
+                f"[API ERROR] "
+                f"{func.__name__}: "
+                f"{type(e).__name__}: {e}"
+            )
+
             return None
-# ==============================================================================
-#                                [ PART 2 / 4 ]
-# ==============================================================================
+
 
 # ==============================================================================
-# 3. LLM API PROVIDERS
+# 5. GEMINI
 # ==============================================================================
+
 def call_gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    response = requests.post(url, json=payload, timeout=8)
-    response.raise_for_status()
-    data = response.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
 
+    if not GEMINI_API_KEY:
+        print("[GEMINI] API key missing")
+        return None
+
+    url = (
+        "https://generativelanguage.googleapis.com/"
+        f"v1beta/models/{GEMINI_MODEL}:generateContent"
+        f"?key={GEMINI_API_KEY}"
+    )
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = requests.post(
+        url,
+        json=payload,
+        timeout=10
+    )
+
+    if not response.ok:
+
+        print(
+            f"[GEMINI] HTTP "
+            f"{response.status_code}: "
+            f"{response.text[:1000]}"
+        )
+
+        response.raise_for_status()
+
+    data = response.json()
+
+    candidates = data.get(
+        "candidates",
+        []
+    )
+
+    if not candidates:
+        raise RuntimeError(
+            "Gemini returned no candidates."
+        )
+
+    parts = (
+        candidates[0]
+        .get("content", {})
+        .get("parts", [])
+    )
+
+    text = ""
+
+    for part in parts:
+
+        if isinstance(part, dict):
+
+            text += part.get(
+                "text",
+                ""
+            )
+
+    text = text.strip()
+
+    if not text:
+        raise RuntimeError(
+            "Gemini returned empty text."
+        )
+
+    return text
+
+
+# ==============================================================================
+# 6. GROQ
+# ==============================================================================
 
 def call_groq(prompt):
-    url = "https://api.groq.com/openai/v1/chat/completions"
+
+    if not GROQ_API_KEY:
+        print("[GROQ] API key missing")
+        return None
+
+    url = (
+        "https://api.groq.com/"
+        "openai/v1/chat/completions"
+    )
+
     headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Authorization": (
+            f"Bearer {GROQ_API_KEY}"
+        ),
         "Content-Type": "application/json"
     }
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    response = requests.post(url, json=payload, headers=headers, timeout=8)
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
 
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.2
+    }
+
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=10
+    )
+
+    if not response.ok:
+
+        print(
+            f"[GROQ] HTTP "
+            f"{response.status_code}: "
+            f"{response.text[:1000]}"
+        )
+
+        response.raise_for_status()
+
+    data = response.json()
+
+    choices = data.get(
+        "choices",
+        []
+    )
+
+    if not choices:
+        raise RuntimeError(
+            "Groq returned no choices."
+        )
+
+    text = (
+        choices[0]
+        .get("message", {})
+        .get("content", "")
+    )
+
+    if not text:
+        raise RuntimeError(
+            "Groq returned empty text."
+        )
+
+    return text.strip()
+
+
+# ==============================================================================
+# 7. CEREBRAS
+# ==============================================================================
 
 def call_cerebras(prompt):
-    url = "https://api.cerebras.ai/v1/chat/completions"
+
+    if not CEREBRAS_API_KEY:
+        print("[CEREBRAS] API key missing")
+        return None
+
+    url = (
+        "https://api.cerebras.ai/"
+        "v1/chat/completions"
+    )
+
     headers = {
-        "Authorization": f"Bearer {CEREBRAS_API_KEY}",
+        "Authorization": (
+            f"Bearer {CEREBRAS_API_KEY}"
+        ),
         "Content-Type": "application/json"
     }
-    payload = {
-        "model": "llama-3.3-70b",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    response = requests.post(url, json=payload, headers=headers, timeout=8)
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
 
+    payload = {
+        "model": CEREBRAS_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.2
+    }
+
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=10
+    )
+
+    if not response.ok:
+
+        print(
+            f"[CEREBRAS] HTTP "
+            f"{response.status_code}: "
+            f"{response.text[:1000]}"
+        )
+
+        response.raise_for_status()
+
+    data = response.json()
+
+    choices = data.get(
+        "choices",
+        []
+    )
+
+    if not choices:
+        raise RuntimeError(
+            "Cerebras returned no choices."
+        )
+
+    text = (
+        choices[0]
+        .get("message", {})
+        .get("content", "")
+    )
+
+    if not text:
+        raise RuntimeError(
+            "Cerebras returned empty text."
+        )
+
+    return text.strip()
+
+
+# ==============================================================================
+# 8. MISTRAL
+# ==============================================================================
 
 def call_mistral(prompt):
-    url = "https://api.mistral.ai/v1/chat/completions"
+
+    if not MISTRAL_API_KEY:
+        print("[MISTRAL] API key missing")
+        return None
+
+    url = (
+        "https://api.mistral.ai/"
+        "v1/chat/completions"
+    )
+
     headers = {
-        "Authorization": f"Bearer {MISTRAL_API_KEY}",
+        "Authorization": (
+            f"Bearer {MISTRAL_API_KEY}"
+        ),
         "Content-Type": "application/json"
     }
-    payload = {
-        "model": "mistral-small-latest",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    response = requests.post(url, json=payload, headers=headers, timeout=8)
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
 
+    payload = {
+        "model": MISTRAL_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.2
+    }
+
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=10
+    )
+
+    if not response.ok:
+
+        print(
+            f"[MISTRAL] HTTP "
+            f"{response.status_code}: "
+            f"{response.text[:1000]}"
+        )
+
+        response.raise_for_status()
+
+    data = response.json()
+
+    choices = data.get(
+        "choices",
+        []
+    )
+
+    if not choices:
+        raise RuntimeError(
+            "Mistral returned no choices."
+        )
+
+    text = (
+        choices[0]
+        .get("message", {})
+        .get("content", "")
+    )
+
+    if not text:
+        raise RuntimeError(
+            "Mistral returned empty text."
+        )
+
+    return text.strip()
+
+
+# ==============================================================================
+# 9. OPENROUTER
+# ==============================================================================
 
 def call_openrouter(prompt):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+
+    if not OPENROUTER_API_KEY:
+        print("[OPENROUTER] API key missing")
+        return None
+
+    url = (
+        "https://openrouter.ai/"
+        "api/v1/chat/completions"
+    )
+
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
+        "Authorization": (
+            f"Bearer {OPENROUTER_API_KEY}"
+        ),
+        "Content-Type": "application/json",
+        "HTTP-Referer": (
+            "https://anisur-mcq-2026.streamlit.app/"
+        ),
+        "X-Title": "Anis AI"
     }
+
     payload = {
-        "model": "meta-llama/llama-3.3-70b-instruct:free",
-        "messages": [{"role": "user", "content": prompt}]
+        "model": OPENROUTER_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.2
     }
-    response = requests.post(url, json=payload, headers=headers, timeout=8)
-    response.raise_for_status()
+
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=10
+    )
+
+    if not response.ok:
+
+        print(
+            f"[OPENROUTER] HTTP "
+            f"{response.status_code}: "
+            f"{response.text[:1000]}"
+        )
+
+        response.raise_for_status()
+
     data = response.json()
-    return data["choices"][0]["message"]["content"]
+
+    choices = data.get(
+        "choices",
+        []
+    )
+
+    if not choices:
+        raise RuntimeError(
+            "OpenRouter returned no choices."
+        )
+
+    text = (
+        choices[0]
+        .get("message", {})
+        .get("content", "")
+    )
+
+    if not text:
+        raise RuntimeError(
+            "OpenRouter returned empty text."
+        )
+
+    return text.strip()
 
 
 # ==============================================================================
-# 4. TASK CLASSIFICATION & FALLBACK CHAINS
+# 10. TASK CLASSIFICATION
 # ==============================================================================
+
 def classify_task(message):
-    text = message.lower()
-    code_keywords = ["code", "```", "function", "error", "python", "fix", "bug", "script", "কোড", "প্রোগ্রাম"]
-    reasoning_keywords = ["calculate", "solve", "logic", "গণনা", "সমাধান", "+", "-", "="]
-    search_keywords = ["latest", "today", "news", "current", "এখন", "আজ", "সাম্প্রতিক", "খবর"]
 
-    if any(k in text for k in code_keywords):
+    text = str(message).lower()
+
+    code_keywords = [
+        "code",
+        "```",
+        "function",
+        "error",
+        "python",
+        "fix",
+        "bug",
+        "script",
+        "কোড",
+        "প্রোগ্রাম",
+        "ত্রুটি",
+        "ঠিক কর"
+    ]
+
+    reasoning_keywords = [
+        "calculate",
+        "solve",
+        "logic",
+        "গণনা",
+        "সমাধান",
+        "যোগ",
+        "বিয়োগ",
+        "+",
+        "-",
+        "="
+    ]
+
+    search_keywords = [
+        "latest",
+        "today",
+        "news",
+        "current",
+        "এখন",
+        "আজ",
+        "সাম্প্রতিক",
+        "খবর"
+    ]
+
+    if any(
+        k in text
+        for k in code_keywords
+    ):
         return "code"
-    elif any(k in text for k in reasoning_keywords):
-        return "reasoning"
-    elif any(k in text for k in search_keywords):
-        return "search"
-    else:
-        return "general"
 
+    if any(
+        k in text
+        for k in reasoning_keywords
+    ):
+        return "reasoning"
+
+    if any(
+        k in text
+        for k in search_keywords
+    ):
+        return "search"
+
+    return "general"
+
+
+# ==============================================================================
+# 11. FALLBACK CHAINS
+# ==============================================================================
 
 TEXT_AI_CHAINS = {
+
     "code": [
-        ("cerebras", call_cerebras),
         ("groq", call_groq),
+        ("cerebras", call_cerebras),
         ("gemini", call_gemini),
         ("mistral", call_mistral),
-        ("openrouter", call_openrouter),
+        ("openrouter", call_openrouter)
     ],
+
     "general": [
         ("gemini", call_gemini),
         ("groq", call_groq),
-        ("mistral", call_mistral),
-        ("openrouter", call_openrouter),
         ("cerebras", call_cerebras),
+        ("mistral", call_mistral),
+        ("openrouter", call_openrouter)
     ],
+
     "reasoning": [
         ("cerebras", call_cerebras),
-        ("mistral", call_mistral),
         ("gemini", call_gemini),
         ("groq", call_groq),
+        ("mistral", call_mistral),
+        ("openrouter", call_openrouter)
     ],
+
+    "search": [
+        ("gemini", call_gemini),
+        ("groq", call_groq),
+        ("cerebras", call_cerebras),
+        ("mistral", call_mistral),
+        ("openrouter", call_openrouter)
+    ]
 }
 
 
-def run_text_ai_chain(prompt, task_type="general"):
-    chain = TEXT_AI_CHAINS.get(task_type, TEXT_AI_CHAINS["general"])
+# ==============================================================================
+# 12. RUN FALLBACK
+# ==============================================================================
+
+def run_text_ai_chain(
+    prompt,
+    task_type="general"
+):
+
+    chain = TEXT_AI_CHAINS.get(
+        task_type,
+        TEXT_AI_CHAINS["general"]
+    )
+
+    print(
+        f"[AI CHAIN] Task: {task_type}"
+    )
 
     for provider_key, provider_func in chain:
-        result = call_with_timeout(provider_func, prompt, timeout=6)
+
+        print(
+            f"[AI] Trying: "
+            f"{provider_key}"
+        )
+
+        result = call_with_timeout(
+            provider_func,
+            prompt,
+            timeout=10
+        )
+
         if result:
-            return {"answer": result, "provider_used": provider_key}
 
-    return {"answer": None, "provider_used": None}
-# ==============================================================================
-#                                [ PART 3 / 4 ]
-# ==============================================================================
+            print(
+                f"[AI] SUCCESS: "
+                f"{provider_key}"
+            )
 
-# ==============================================================================
-# 5. LIVE SEARCH & SCRAPING
-# ==============================================================================
+            return {
+                "answer": result,
+                "provider_used": provider_key
+            }
+
+        print(
+            f"[AI] FAILED: "
+            f"{provider_key} "
+            f"→ next provider"
+        )
+
+    print(
+        "[AI] ALL PROVIDERS FAILED"
+    )
+
+    return {
+        "answer": None,
+        "provider_used": None
+    }
+# =============================================================================
+# ANIS AI - ENTERPRISE BACKEND
+# helpers.py - SECOND PART (PART 2/2)
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# WEB SEARCH
+# -----------------------------------------------------------------------------
+
 def call_tavily(query):
-    url = "https://api.tavily.com/search"
-    payload = {"api_key": TAVILY_API_KEY, "query": query, "max_results": 4}
-    response = requests.post(url, json=payload, timeout=6)
-    response.raise_for_status()
-    results = response.json().get("results", [])
-    combined = "\n".join([f"- {r.get('title')}: {r.get('content','')[:200]}" for r in results])
-    return combined if combined else None
+    if not TAVILY_API_KEY:
+        return None
 
-
-def call_serper(query):
-    url = "https://google.serper.dev/search"
-    headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
-    payload = {"q": query}
-    response = requests.post(url, json=payload, headers=headers, timeout=6)
-    response.raise_for_status()
-    organic = response.json().get("organic", [])
-    combined = "\n".join([f"- {r.get('title')}: {r.get('snippet','')}" for r in organic[:4]])
-    return combined if combined else None
-
-
-def run_web_search(query):
-    chain = [("tavily", call_tavily), ("serper", call_serper)]
-    for provider_key, provider_func in chain:
-        result = call_with_timeout(provider_func, query, timeout=4)
-        if result:
-            return result
-    return None
-
-
-def call_firecrawl(url_to_scrape):
-    api_url = "https://api.firecrawl.dev/v1/scrape"
-    headers = {"Authorization": f"Bearer {FIRECRAWL_API_KEY}", "Content-Type": "application/json"}
-    payload = {"url": url_to_scrape}
-    response = requests.post(api_url, json=payload, headers=headers, timeout=8)
-    response.raise_for_status()
-    data = response.json()
-    return data.get("data", {}).get("markdown")
-
-
-def call_jina(url_to_scrape):
-    api_url = f"https://r.jina.ai/{url_to_scrape}"
-    headers = {"Authorization": f"Bearer {JINA_API_KEY}"}
-    response = requests.get(api_url, headers=headers, timeout=8)
-    response.raise_for_status()
-    return response.text
-
-
-def run_scrape(url_to_scrape):
-    chain = [("firecrawl", call_firecrawl), ("jina", call_jina)]
-    for provider_key, provider_func in chain:
-        result = call_with_timeout(provider_func, url_to_scrape, timeout=5)
-        if result:
-            return result
-    return None
-
-# ==============================================================================
-# 6. OCR, IMAGE GEN, VOICE & AUDIO
-# ==============================================================================
-def call_ocr(image_bytes):
-    url = "https://api.ocr.space/parse/image"
-    files = {"file": image_bytes}
-    data = {"apikey": OCR_API_KEY, "language": "eng"}
-    response = requests.post(url, files=files, data=data, timeout=8)
-    response.raise_for_status()
     try:
-        return response.json()["ParsedResults"][0]["ParsedText"]
-    except Exception:
+        url = "https://api.tavily.com/search"
+
+        payload = {
+            "api_key": TAVILY_API_KEY,
+            "query": query,
+            "search_depth": "advanced",
+            "max_results": 5,
+            "include_answer": True
+        }
+
+        response = requests.post(
+            url,
+            json=payload,
+            timeout=15
+        )
+
+        if not response.ok:
+            print(
+                f"[TAVILY] HTTP {response.status_code}: "
+                f"{response.text[:1000]}"
+            )
+            return None
+
+        data = response.json()
+
+        answer = data.get("answer")
+        if answer:
+            return answer.strip()
+
+        results = data.get("results", [])
+
+        if not results:
+            return None
+
+        text_parts = []
+
+        for item in results:
+            title = item.get("title", "")
+            content = item.get("content", "")
+
+            if title:
+                text_parts.append(title)
+
+            if content:
+                text_parts.append(content)
+
+        final_text = "\n\n".join(text_parts)
+
+        return final_text[:12000].strip() or None
+
+    except Exception as e:
+        print(f"[TAVILY ERROR] {type(e).__name__}: {e}")
         return None
 
 
-def call_stability_image_gen(prompt):
-    url = "https://api.stability.ai/v2beta/stable-image/generate/core"
-    headers = {"Authorization": f"Bearer {STABILITY_API_KEY}", "Accept": "image/*"}
-    files = {"prompt": (None, prompt), "output_format": (None, "png")}
-    response = requests.post(url, headers=headers, files=files, timeout=15)
-    response.raise_for_status()
-    return response.content
+def call_serper(query):
+    if not SERPER_API_KEY:
+        return None
 
+    try:
+        url = "https://google.serper.dev/search"
 
-def call_elevenlabs_tts(text):
-    voice_id = "21m00Tcm4TlvDq8ikWAM"
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-    headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
-    payload = {"text": text, "model_id": "eleven_multilingual_v2"}
-    response = requests.post(url, json=payload, headers=headers, timeout=10)
-    response.raise_for_status()
-    return response.content
+        headers = {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json"
+        }
 
+        payload = {
+            "q": query,
+            "num": 5
+        }
 
-def call_assemblyai_stt(audio_file_path):
-    headers = {"authorization": ASSEMBLYAI_API_KEY}
-    with open(audio_file_path, "rb") as f:
-        upload_response = requests.post(
-            "https://api.assemblyai.com/v2/upload", headers=headers, data=f, timeout=10
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=15
         )
-    audio_url = upload_response.json()["upload_url"]
 
-    transcript_response = requests.post(
-        "https://api.assemblyai.com/v2/transcript",
-        json={"audio_url": audio_url},
-        headers=headers, timeout=10
-    )
-    transcript_id = transcript_response.json()["id"]
-
-    while True:
-        polling = requests.get(
-            f"https://api.assemblyai.com/v2/transcript/{transcript_id}",
-            headers=headers, timeout=10
-        ).json()
-        if polling["status"] == "completed":
-            return polling["text"]
-        elif polling["status"] == "error":
+        if not response.ok:
+            print(
+                f"[SERPER] HTTP {response.status_code}: "
+                f"{response.text[:1000]}"
+            )
             return None
-        time.sleep(1)
-# ==============================================================================
-#                                [ PART 4 / 4 ]
-# ==============================================================================
 
-# ==============================================================================
-# 7. MAIN INTERFACE FUNCTION (Direct Link with main.py)
-# ==============================================================================
-def generate_ai_response(prompt: str, model: str = "default", chat_history: list = None, web_search_enabled: bool = True, image_file=None) -> str:
+        data = response.json()
+
+        results = data.get("organic", [])
+
+        if not results:
+            return None
+
+        text_parts = []
+
+        for item in results:
+            title = item.get("title", "")
+            snippet = item.get("snippet", "")
+
+            if title:
+                text_parts.append(title)
+
+            if snippet:
+                text_parts.append(snippet)
+
+        final_text = "\n\n".join(text_parts)
+
+        return final_text[:12000].strip() or None
+
+    except Exception as e:
+        print(f"[SERPER ERROR] {type(e).__name__}: {e}")
+        return None
+
+
+def run_web_search(query):
     """
-    main.py এর সাথে ১০০% সামঞ্জস্যপূর্ণ মূল ফাংশন।
+    Web search fallback:
+    Tavily → Serper
     """
-    if chat_history is None:
-        chat_history = []
 
-    # ১. ছবি প্রসেসিং (যদি থাকে)
-    extra_context = ""
-    if image_file is not None:
-        try:
-            image_bytes = image_file.read()
-            ocr_text = call_with_timeout(call_ocr, image_bytes, timeout=6)
-            if ocr_text:
-                extra_context += f"\n[Image Extracted Context]:\n{ocr_text}"
-        except Exception as e:
-            print(f"[OCR Non-Fatal Error]: {e}")
+    print(f"[WEB SEARCH] Query: {query}")
 
-    # ২. টাস্ক ক্লাসিফিকেশন
-    task_type = classify_task(prompt)
+    result = call_tavily(query)
 
-    # ৩. প্রয়োজন অনুযায়ী রিয়েলটাইম ওয়েব সার্চ
-    search_context = ""
-    if web_search_enabled and task_type == "search":
-        search_result = run_web_search(prompt)
-        if search_result:
-            search_context = f"\n[Live Web Search Context]:\n{search_result}"
+    if result:
+        print("[WEB SEARCH] SUCCESS: Tavily")
+        return result
 
-    # ৪. পূর্বের চ্যাট হিস্ট্রি প্রম্পটে যুক্ত করা
-    formatted_history = ""
-    if chat_history:
-        recent = chat_history[-6:]
-        history_lines = []
-        for msg in recent:
-            role = "User" if msg.get("role") == "user" else "ANIA AI"
-            history_lines.append(f"{role}: {msg.get('content', '')}")
-        formatted_history = "Conversation History:\n" + "\n".join(history_lines) + "\n\n"
+    print("[WEB SEARCH] Tavily failed → trying Serper")
 
-    # ৫. সম্পূর্ণ প্রম্পট প্রস্তুত করা
-    final_prompt = f"{formatted_history}Current User Query: {prompt}{search_context}{extra_context}"
+    result = call_serper(query)
 
-    # ৬. মাল্টি-প্রোভাইডার ফলব্যাক চেইন এক্সিকিউট করা
-    result = run_text_ai_chain(final_prompt, task_type=task_type)
+    if result:
+        print("[WEB SEARCH] SUCCESS: Serper")
+        return result
 
-    # ৭. রেসপন্স চেক ও এরর রেইজ (ফেইল করলে main.py এর স্পেশাল কার্ড ওপেন হবে)
-    if not result or result.get("provider_used") is None or not result.get("answer"):
-        raise RuntimeError("All internal neural pipelines failed to generate completion.")
+    print("[WEB SEARCH] ALL SEARCH PROVIDERS FAILED")
 
-    return result["answer"]
+    return None
 
-# অ্যালিয়াস (Backwards Compatibility)
+
+# -----------------------------------------------------------------------------
+# WEB SCRAPING
+# -----------------------------------------------------------------------------
+
+def call_firecrawl(url):
+    if not FIRECRAWL_API_KEY:
+        return None
+
+    try:
+        endpoint = "https://api.firecrawl.dev/v1/scrape"
+
+        headers = {
+            "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "url": url,
+            "formats": ["markdown"]
+        }
+
+        response = requests.post(
+            endpoint,
+            json=payload,
+            headers=headers,
+            timeout=20
+        )
+
+        if not response.ok:
+            print(
+                f"[FIRECRAWL] HTTP {response.status_code}: "
+                f"{response.text[:1000]}"
+            )
+            return None
+
+        data = response.json()
+
+        result = data.get("data", {})
+
+        markdown = result.get("markdown")
+
+        if markdown:
+            return markdown[:20000].strip()
+
+        return None
+
+    except Exception as e:
+        print(f"[FIRECRAWL ERROR] {type(e).__name__}: {e}")
+        return None
+
+
+def call_jina(url):
+    if not JINA_API_KEY:
+        return None
+
+    try:
+        endpoint = f"https://r.jina.ai/{url}"
+
+        headers = {
+            "Authorization": f"Bearer {JINA_API_KEY}"
+        }
+
+        response = requests.get(
+            endpoint,
+            headers=headers,
+            timeout=20
+        )
+
+        if not response.ok:
+            print(
+                f"[JINA] HTTP {response.status_code}: "
+                f"{response.text[:1000]}"
+            )
+            return None
+
+        text = response.text.strip()
+
+        return text[:20000] if text else None
+
+    except Exception as e:
+        print(f"[JINA ERROR] {type(e).__name__}: {e}")
+        return None
+
+
+def run_scrape(url):
+    """
+    Scraping fallback:
+    Firecrawl → Jina
+    """
+
+    print(f"[SCRAPE] URL: {url}")
+
+    result = call_firecrawl(url)
+
+    if result:
+        print("[SCRAPE] SUCCESS: Firecrawl")
+        return result
+
+    print("[SCRAPE] Firecrawl failed → trying Jina")
+
+    result = call_jina(url)
+
+    if result:
+        print("[SCRAPE] SUCCESS: Jina")
+        return result
+
+    print("[SCRAPE] ALL SCRAPERS FAILED")
+
+    return None
+
+
+# -----------------------------------------------------------------------------
+# OCR
+# -----------------------------------------------------------------------------
+
+def call_ocr(image_file):
+    if not OCR_API_KEY:
+        print("[OCR] API key missing")
+        return None
+
+    try:
+        url = "https://api.ocr.space/parse/image"
+
+        with open(image_file, "rb") as file:
+            files = {
+                "file": file
+            }
+
+            data = {
+                "apikey": OCR_API_KEY,
+                "language": "eng",
+                "isOverlayRequired": False,
+                "OCREngine": 2,
+                "scale": True
+            }
+
+            response = requests.post(
+                url,
+                files=files,
+                data=data,
+                timeout=30
+            )
+
+        if not response.ok:
+            print(
+                f"[OCR] HTTP {response.status_code}: "
+                f"{response.text[:1000]}"
+            )
+            return None
+
+        result = response.json()
+
+        if result.get("IsErroredOnProcessing"):
+            print(
+                "[OCR ERROR] "
+                f"{result.get('ErrorMessage')}"
+            )
+            return None
+
+        parsed_results = result.get("ParsedResults", [])
+
+        if not parsed_results:
+            return None
+
+        text_parts = []
+
+        for item in parsed_results:
+            parsed_text = item.get("ParsedText", "")
+
+            if parsed_text:
+                text_parts.append(parsed_text)
+
+        final_text = "\n".join(text_parts).strip()
+
+        return final_text if final_text else None
+
+    except Exception as e:
+        print(f"[OCR ERROR] {type(e).__name__}: {e}")
+        return None
+
+
+# -----------------------------------------------------------------------------
+# IMAGE GENERATION
+# -----------------------------------------------------------------------------
+
+def call_stability_image_gen(prompt):
+    if not STABILITY_API_KEY:
+        print("[STABILITY] API key missing")
+        return None
+
+    try:
+        url = (
+            "https://api.stability.ai/"
+            "v2beta/stable-image/generate/core"
+        )
+
+        headers = {
+            "Authorization": f"Bearer {STABILITY_API_KEY}",
+            "Accept": "image/*"
+        }
+
+        data = {
+            "prompt": prompt,
+            "output_format": "png"
+        }
+
+        response = requests.post(
+            url,
+            headers=headers,
+            files={
+                "none": ""
+            },
+            data=data,
+            timeout=60
+        )
+
+        if not response.ok:
+            print(
+                f"[STABILITY] HTTP {response.status_code}: "
+                f"{response.text[:1000]}"
+            )
+            return None
+
+        return response.content
+
+    except Exception as e:
+        print(
+            f"[STABILITY ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+        return None
+
+
+# -----------------------------------------------------------------------------
+# TEXT TO SPEECH - ELEVENLABS
+# -----------------------------------------------------------------------------
+
+def call_elevenlabs_tts(text, voice_id=None):
+    if not ELEVENLABS_API_KEY:
+        print("[ELEVENLABS] API key missing")
+        return None
+
+    try:
+        if not voice_id:
+            voice_id = "21m00Tcm4TlvDq8ikWAM"
+
+        url = (
+            f"https://api.elevenlabs.io/v1/"
+            f"text-to-speech/{voice_id}"
+        )
+
+        headers = {
+            "xi-api-key": ELEVENLABS_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg"
+        }
+
+        payload = {
+            "text": text,
+            "model_id": "eleven_multilingual_v2"
+        }
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        if not response.ok:
+            print(
+                f"[ELEVENLABS] HTTP {response.status_code}: "
+                f"{response.text[:1000]}"
+            )
+            return None
+
+        return response.content
+
+    except Exception as e:
+        print(
+            f"[ELEVENLABS ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+        return None
+
+
+# -----------------------------------------------------------------------------
+# SPEECH TO TEXT - ASSEMBLYAI
+# -----------------------------------------------------------------------------
+
+def call_assemblyai_stt(audio_file):
+    if not ASSEMBLYAI_API_KEY:
+        print("[ASSEMBLYAI] API key missing")
+        return None
+
+    headers = {
+        "authorization": ASSEMBLYAI_API_KEY
+    }
+
+    try:
+        # Upload audio
+        with open(audio_file, "rb") as file:
+            upload_response = requests.post(
+                "https://api.assemblyai.com/v2/upload",
+                headers=headers,
+                data=file,
+                timeout=60
+            )
+
+        if not upload_response.ok:
+            print(
+                f"[ASSEMBLYAI UPLOAD] HTTP "
+                f"{upload_response.status_code}: "
+                f"{upload_response.text[:1000]}"
+            )
+            return None
+
+        upload_data = upload_response.json()
+
+        audio_url = upload_data.get("upload_url")
+
+        if not audio_url:
+            print("[ASSEMBLYAI] Upload URL missing")
+            return None
+
+        # Create transcript
+        transcript_response = requests.post(
+            "https://api.assemblyai.com/v2/transcript",
+            headers={
+                **headers,
+                "content-type": "application/json"
+            },
+            json={
+                "audio_url": audio_url
+            },
+            timeout=30
+        )
+
+        if not transcript_response.ok:
+            print(
+                f"[ASSEMBLYAI TRANSCRIPT] HTTP "
+                f"{transcript_response.status_code}: "
+                f"{transcript_response.text[:1000]}"
+            )
+            return None
+
+        transcript_data = transcript_response.json()
+
+        transcript_id = transcript_data.get("id")
+
+        if not transcript_id:
+            print("[ASSEMBLYAI] Transcript ID missing")
+            return None
+
+        # Poll with a limit
+        poll_url = (
+            f"https://api.assemblyai.com/v2/"
+            f"transcript/{transcript_id}"
+        )
+
+        for _ in range(30):
+            poll_response = requests.get(
+                poll_url,
+                headers=headers,
+                timeout=20
+            )
+
+            if not poll_response.ok:
+                print(
+                    f"[ASSEMBLYAI POLL] HTTP "
+                    f"{poll_response.status_code}: "
+                    f"{poll_response.text[:1000]}"
+                )
+                return None
+
+            data = poll_response.json()
+
+            status = data.get("status")
+
+            if status == "completed":
+                text = data.get("text", "")
+                return text.strip() if text else None
+
+            if status == "error":
+                print(
+                    "[ASSEMBLYAI] "
+                    f"{data.get('error', 'Unknown error')}"
+                )
+                return None
+
+            time.sleep(2)
+
+        print("[ASSEMBLYAI] Transcription timeout")
+        return None
+
+    except Exception as e:
+        print(
+            f"[ASSEMBLYAI ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+        return None
+
+
+# -----------------------------------------------------------------------------
+# MAIN AI RESPONSE FUNCTION
+# -----------------------------------------------------------------------------
+
+def generate_ai_response(
+    prompt,
+    task_type=None,
+    use_web=False,
+    web_query=None
+):
+    """
+    Main entry point used by Anis AI.
+
+    Flow:
+        Optional Web Search
+              ↓
+        Task Classification
+              ↓
+        AI Provider Fallback Chain
+              ↓
+        Final Response
+    """
+
+    try:
+        if not prompt:
+            return {
+                "answer": None,
+                "provider_used": None
+            }
+
+        prompt = str(prompt).strip()
+
+        if not task_type:
+            task_type = classify_task(prompt)
+
+        # -------------------------------------------------------------
+        # OPTIONAL WEB SEARCH
+        # -------------------------------------------------------------
+
+        web_context = None
+
+        if use_web:
+            query = web_query or prompt
+
+            print(
+                f"[AI] Web search enabled: {query}"
+            )
+
+            web_context = run_web_search(query)
+
+        # -------------------------------------------------------------
+        # BUILD FINAL PROMPT
+        # -------------------------------------------------------------
+
+        final_prompt = prompt
+
+        if web_context:
+            final_prompt = f"""
+You are Anis AI.
+
+Use the web information below when it is relevant.
+Do not blindly copy it.
+If the information is uncertain or conflicting, clearly say so.
+
+WEB INFORMATION:
+{web_context}
+
+USER REQUEST:
+{prompt}
+
+Give a clear, accurate and useful answer.
+""".strip()
+
+        # -------------------------------------------------------------
+        # RUN AI FALLBACK CHAIN
+        # -------------------------------------------------------------
+
+        result = run_text_ai_chain(
+            final_prompt,
+            task_type=task_type
+        )
+
+        if result and result.get("answer"):
+            return result
+
+        # -------------------------------------------------------------
+        # COMPLETE FAILURE
+        # -------------------------------------------------------------
+
+        return {
+            "answer": (
+                "Sorry, Anis AI could not connect to any "
+                "available AI provider right now. "
+                "Please try again in a moment."
+            ),
+            "provider_used": None
+        }
+
+    except Exception as e:
+        print(
+            f"[GENERATE AI ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+        return {
+            "answer": (
+                "An unexpected error occurred in Anis AI. "
+                "Please try again."
+            ),
+            "provider_used": None
+        }
+
+
+# -----------------------------------------------------------------------------
+# BACKWARD COMPATIBILITY
+# -----------------------------------------------------------------------------
+
 get_ai_response = generate_ai_response
+
+
+# -----------------------------------------------------------------------------
+# FINAL STATUS
+# -----------------------------------------------------------------------------
+
+print("============================================================")
+print("ANIS AI BACKEND LOADED")
+print("Gemini     :", "READY" if GEMINI_API_KEY else "MISSING")
+print("Groq       :", "READY" if GROQ_API_KEY else "MISSING")
+print("Cerebras   :", "READY" if CEREBRAS_API_KEY else "MISSING")
+print("Mistral    :", "READY" if MISTRAL_API_KEY else "MISSING")
+print("OpenRouter :", "READY" if OPENROUTER_API_KEY else "MISSING")
+print("============================================================")
