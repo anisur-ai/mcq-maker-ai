@@ -588,7 +588,7 @@ TEXT_AI_CHAINS = {
 
     "code": [
         ("groq", call_groq),
-        ("cerebras", call_cerebras),
+        ("cloudflare", call_cloudflare),
         ("gemini", call_gemini),
         ("mistral", call_mistral),
         ("openrouter", call_openrouter)
@@ -597,13 +597,13 @@ TEXT_AI_CHAINS = {
     "general": [
         ("gemini", call_gemini),
         ("groq", call_groq),
-        ("cerebras", call_cerebras),
+        ("cloudflare", call_cloudflare),
         ("mistral", call_mistral),
         ("openrouter", call_openrouter)
     ],
 
     "reasoning": [
-        ("cerebras", call_cerebras),
+        ("cloudflare", call_cloudflare),
         ("gemini", call_gemini),
         ("groq", call_groq),
         ("mistral", call_mistral),
@@ -613,7 +613,7 @@ TEXT_AI_CHAINS = {
     "search": [
         ("gemini", call_gemini),
         ("groq", call_groq),
-        ("cerebras", call_cerebras),
+        ("cloudflare", call_cloudflare),
         ("mistral", call_mistral),
         ("openrouter", call_openrouter)
     ]
