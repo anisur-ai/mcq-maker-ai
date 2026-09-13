@@ -281,29 +281,29 @@ def call_groq(prompt):
 
 
 # ==============================================================================
-# 7. CEREBRAS
-# ==============================================================================
+# 7. CLOUDFLARE
+# =============================================================================
 
-def call_cerebras(prompt):
+def call_cloudflare(prompt):
 
-    if not CEREBRAS_API_KEY:
-        print("[CEREBRAS] API key missing")
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
+        print("[CLOUDFLARE] API key or account ID missing")
         return None
 
     url = (
-        "https://api.cerebras.ai/"
-        "v1/chat/completions"
+        f"https://api.cloudflare.com/client/v4/accounts/"
+        f"{CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions"
     )
 
     headers = {
         "Authorization": (
-            f"Bearer {CEREBRAS_API_KEY}"
+            f"Bearer {CLOUDFLARE_API_TOKEN}"
         ),
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": CEREBRAS_MODEL,
+        "model": CLOUDFLARE_MODEL,
         "messages": [
             {
                 "role": "user",
@@ -323,7 +323,7 @@ def call_cerebras(prompt):
     if not response.ok:
 
         print(
-            f"[CEREBRAS] HTTP "
+            f"[CLOUDFLARE] HTTP "
             f"{response.status_code}: "
             f"{response.text[:1000]}"
         )
@@ -339,7 +339,7 @@ def call_cerebras(prompt):
 
     if not choices:
         raise RuntimeError(
-            "Cerebras returned no choices."
+            "Cloudflare returned no choices."
         )
 
     text = (
@@ -350,7 +350,7 @@ def call_cerebras(prompt):
 
     if not text:
         raise RuntimeError(
-            "Cerebras returned empty text."
+            "Cloudflare returned empty text."
         )
 
     return text.strip()
