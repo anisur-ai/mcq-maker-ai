@@ -48,7 +48,7 @@ CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b"
 
 MISTRAL_MODEL = "mistral-small-latest"
 
-OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+OPENROUTER_MODEL = "openrouter/free"
 
 
 # ==============================================================================
