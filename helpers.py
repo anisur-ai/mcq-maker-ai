@@ -20,7 +20,7 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-CLOUDFLARE_API_KEY = os.getenv("CLOUDFLARE_API_TOKEN")
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN")
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -58,7 +58,7 @@ OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 MODEL_DISPLAY_NAMES = {
     "gemini": "Anis 1.0 Flash",
     "groq": "Anis 1.0 Turbo",
-    "cerebras": "Anis 1.1 Flash",
+    "cloudflare": "Anis 1.1 Flash",
     "mistral": "Anis 1.1 Pro",
     "openrouter": "Anis 1.2 Pro",
 }
