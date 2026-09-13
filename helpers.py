@@ -39,7 +39,7 @@ ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 # 2. MODEL CONFIGURATION
 # ==============================================================================
 
-GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 GROQ_MODEL = "openai/gpt-oss-120b"
 
